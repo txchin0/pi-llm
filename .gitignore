@@ -11,6 +11,7 @@
 # Local data and runtime artifacts
 /.data/
 /.planning/debug/
+/data/
 
 # Environment files
 .env
@@ -32,3 +33,5 @@ Thumbs.db
 .idea/
 .vscode/
 .codex/
+
+todo.txt

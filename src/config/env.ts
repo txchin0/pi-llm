@@ -1,3 +1,7 @@
+import { DateTime } from 'luxon';
+
+const DEFAULT_TIMEZONE = 'Australia/Sydney';
+
 /** Reads `PORT` from the environment, defaulting to 3000 when unset. */
 function parsePort(value: string | undefined): number {
   if (value === undefined) {
@@ -92,6 +96,20 @@ function parseLogPretty(
   throw new Error(`Invalid LOG_PRETTY value: ${value}. Expected true or false.`);
 }
 
+/** Parses `TIMEZONE` (IANA), defaulting to Australia/Sydney when unset. */
+function parseTimezone(value: string | undefined): string {
+  const zone =
+    value === undefined || value.trim() === '' ? DEFAULT_TIMEZONE : value.trim();
+
+  if (!DateTime.now().setZone(zone).isValid) {
+    throw new Error(
+      `Invalid TIMEZONE value: ${zone}. Expected a valid IANA timezone (e.g. Australia/Sydney).`,
+    );
+  }
+
+  return zone;
+}
+
 const nodeEnv = parseNodeEnv(process.env.NODE_ENV);
 
 export const env = {
@@ -100,6 +118,7 @@ export const env = {
   DATA_ROOT: parseDataRoot(process.env.DATA_ROOT),
   LOG_LEVEL: parseLogLevel(process.env.LOG_LEVEL, nodeEnv),
   LOG_PRETTY: parseLogPretty(process.env.LOG_PRETTY, nodeEnv),
+  TIMEZONE: parseTimezone(process.env.TIMEZONE),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
   isProd: nodeEnv === 'production',

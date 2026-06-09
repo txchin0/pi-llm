@@ -1,7 +1,7 @@
 import type { RespondHandler, RespondContext } from '../respondHandoff.js';
 import type { RespondRequest, RespondSseEvent } from '../../contracts/respond.js';
 import type { AppLogger } from '../../logging/index.js';
-import { enrichUserMessage } from './enrichUserMessage.js';
+import { enrichUserMessage, formatNowInTimezone } from './enrichUserMessage.js';
 import {
   createPiEventMapperState,
   mapPiEventForRequest,
@@ -27,7 +27,7 @@ async function* streamSurfacePrompt(
   context: RespondContext,
   dependencies: SurfaceRespondHandlerDependencies,
 ): AsyncGenerator<RespondSseEvent> {
-  const now = dependencies.now ?? (() => new Date().toISOString());
+  const now = dependencies.now ?? (() => formatNowInTimezone());
   const log = context.logger ?? dependencies.logger;
 
   const session = await dependencies.registry.getOrCreate(
