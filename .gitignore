@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules/
+/.opencode/
+
+# Build and test output
+/dist/
+/coverage/
+/.vitest/
+*.tsbuildinfo
+
+# Local data and runtime artifacts
+/.data/
+/.planning/debug/
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.log-viewer.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Editor and OS clutter
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+.codex/
