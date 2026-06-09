@@ -161,6 +161,41 @@ describe('mapPiEventToRespond', () => {
     ]);
   });
 
+  it('emits llm_error when the assistant ends with an error stop reason', () => {
+    const state = createPiEventMapperState();
+    const message = assistantMessage({
+      stopReason: 'error',
+      errorMessage: "400 model 'local' not found",
+    }).message;
+
+    expect(
+      mapPiEventToRespond(
+        {
+          type: 'agent_end',
+          messages: [message],
+          willRetry: false,
+        },
+        state,
+        mapperContext,
+      ),
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          type: 'error',
+          request_id: mapperContext.requestId,
+          code: 'llm_error',
+          message: "400 model 'local' not found",
+        },
+        {
+          type: 'final',
+          request_id: mapperContext.requestId,
+          finish_reason: 'error',
+          completed_at: '2026-06-09T12:00:00.000Z',
+        },
+      ]),
+    );
+  });
+
   it('skips agent_end while a retry is pending', () => {
     const state = createPiEventMapperState();
 

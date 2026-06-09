@@ -4,6 +4,7 @@ import {
   createSurfaceModelRegistry,
   resolveSurfaceModel,
   surfaceAgentConfig,
+  warnSurfaceLlmEndpoint,
 } from './config/surfaceAgent.js';
 import { createChildLogger, createRootLogger } from './logging/index.js';
 import { createSurfaceRespondHandler } from './runtime/surface/surfaceRespondHandler.js';
@@ -14,6 +15,10 @@ import { buildServer } from './server/buildServer.js';
 export async function startServer(): Promise<void> {
   const listenHost = '0.0.0.0';
   const logger = createRootLogger();
+  await warnSurfaceLlmEndpoint(
+    surfaceAgentConfig,
+    createChildLogger(logger, { component: 'surface' }),
+  );
   const authStorage = createSurfaceAuthStorage();
   const modelRegistry = createSurfaceModelRegistry(authStorage);
   const model = resolveSurfaceModel(modelRegistry);

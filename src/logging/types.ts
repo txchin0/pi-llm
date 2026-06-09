@@ -31,7 +31,8 @@ export type LogEvent =
   | 'respond.delta'
   | 'respond.thinking_delta'
   | 'task.state_changed'
-  | 'agent.error';
+  | 'agent.error'
+  | 'surface.llm.endpoint_warning';
 
 /** Bindings attached to child loggers for correlation and filtering. */
 export type LogContext = {

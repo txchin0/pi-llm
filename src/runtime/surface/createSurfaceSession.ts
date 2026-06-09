@@ -4,6 +4,7 @@ import type {
   SurfaceAgentConfig,
   SurfaceModel,
 } from '../../config/surfaceAgent.js';
+import { validateSurfaceLlmEndpoint } from '../../config/surfaceAgent.js';
 import {
   AgentSession,
   createAgentSession,
@@ -27,6 +28,7 @@ export type CreateSurfaceSessionOptions = {
 export async function createSurfaceSession(
   options: CreateSurfaceSessionOptions,
 ): Promise<AgentSession> {
+  await validateSurfaceLlmEndpoint(options.surfaceAgentConfig);
   await ensureUserWorkspace(options.userMemoryWorkspace);
 
   const { session } = await createAgentSession({

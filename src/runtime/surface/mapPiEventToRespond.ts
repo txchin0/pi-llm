@@ -28,6 +28,7 @@ type AssistantMessageSlice = {
   role: 'assistant';
   usage: AssistantUsageSlice;
   stopReason: ProviderStopReason;
+  errorMessage?: string;
 };
 
 export type PiEventMapperContext = {
@@ -180,6 +181,20 @@ export function mapPiEventToRespond(
           request_id: context.requestId,
           usage: mapUsage(assistantMessage.usage),
         });
+
+        if (
+          assistantMessage.stopReason === 'error' ||
+          assistantMessage.stopReason === 'aborted'
+        ) {
+          events.push({
+            type: 'error',
+            request_id: context.requestId,
+            code: 'llm_error',
+            message:
+              assistantMessage.errorMessage ??
+              'Surface LLM request failed before a response was generated.',
+          });
+        }
       }
 
       events.push({
