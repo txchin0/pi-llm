@@ -938,7 +938,7 @@ npx tsx examples/sdk/01-minimal.ts
 
 ## 19. Implications for pi-llm
 
-Based on [DESIGN.md](../DESIGN.md) and the current stub in `src/runtime/respondOrchestrator.ts`:
+Based on [DESIGN.md](../DESIGN.md) and the respond path in `src/respond/respondController.ts` + `src/surface/surfaceRespondService.ts`:
 
 ### 19.1 Surface Agent Session Setup (Target)
 
@@ -985,15 +985,15 @@ const enrichedMessage = `[Current time: ${now}]\n\n${request.message}`;
 await session.prompt(enrichedMessage);
 ```
 
-### 19.3 RespondHandler Implementation Sketch
+### 19.3 RespondService Implementation
 
-The `RespondHandler` interface in `src/runtime/respondHandoff.ts` should:
+`SurfaceRespondService` in `src/surface/surfaceRespondService.ts` implements `RespondService` from `src/respond/respondService.ts`:
 
-1. Obtain or create a per-`session_id` `AgentSession`.
-2. Subscribe to events before calling `prompt()`.
-3. Map Pi events → `RespondSseEvent` contract in `src/contracts/respond.ts`.
-4. Unsubscribe / keep session alive based on lifecycle policy.
-5. Handle `session.abort()` on client disconnect (Fastify `onClose`).
+1. Obtain or create a per-`session_id` `AgentSession` via `SurfaceSessionRegistry`.
+2. Delegate subscribe/prompt/unsubscribe to `runAgentPrompt` in `src/agent/runAgentPrompt.ts`.
+3. Map Pi events → `RespondSseEvent` contract in `src/contracts/respond.ts` via `mapPiEventForRequest`.
+4. Keep session alive in the registry across turns.
+5. *(Future)* Handle `session.abort()` on client disconnect (Fastify `onClose`).
 
 ### 19.4 Worker Agent Session Setup (Target)
 
@@ -1086,7 +1086,9 @@ Keep a `Map<SessionId, AgentSession>` (or pool) in the server runtime layer.
 |----------|------|
 | Solution design | [DESIGN.md](../DESIGN.md) |
 | SSE respond contract | [src/contracts/respond.ts](../src/contracts/respond.ts) |
-| Orchestrator (stub) | [src/runtime/respondOrchestrator.ts](../src/runtime/respondOrchestrator.ts) |
+| Respond controller | [src/respond/respondController.ts](../src/respond/respondController.ts) |
+| Surface respond service | [src/surface/surfaceRespondService.ts](../src/surface/surfaceRespondService.ts) |
+| Pi prompt runner | [src/agent/runAgentPrompt.ts](../src/agent/runAgentPrompt.ts) |
 
 ---
 

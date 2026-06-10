@@ -1,0 +1,32 @@
+flowchart LR
+  %% Tests mirror src/
+  subgraph tests["tests/"]
+    T1["respond/respondController"]
+    T2["surface/surfaceRespondService"]
+    T3["surface/mapPiEventToRespond"]
+    T4["agent/runAgentPrompt"]
+    T5["integration/respond-route"]
+    T6["contracts/respond"]
+    T7["config/surfaceAgent"]
+    T8["logging/createRootLogger"]
+  end
+
+  subgraph src["src/ (under test)"]
+    S1["respondController"]
+    S2["surfaceRespondService"]
+    S3["mapPiEventToRespond"]
+    S4["runAgentPrompt"]
+    S5["POST /v1/respond"]
+    S6["contracts/respond"]
+    S7["surfaceAgent config"]
+    S8["createRootLogger"]
+  end
+
+  T1 --> S1
+  T2 --> S2
+  T3 --> S3
+  T4 --> S4
+  T5 --> S5
+  T6 --> S6
+  T7 --> S7
+  T8 --> S8

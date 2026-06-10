@@ -7,7 +7,7 @@ import {
   mapPiEventToRespond,
   mapStopReason,
   mapUsage,
-} from '../../src/runtime/surface/mapPiEventToRespond.js';
+} from '../../src/surface/mapPiEventToRespond.js';
 
 const mapperContext = {
   requestId: 'req_test00000001' as const,

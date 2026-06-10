@@ -8,7 +8,7 @@ import {
   resolveUserMemoryWorkspace,
   surfaceAgentConfig,
 } from '../src/config/surfaceAgent.js';
-import { createSurfaceSession } from '../src/runtime/surface/createSurfaceSession.js';
+import { createSurfaceSession } from '../src/surface/createSurfaceSession.js';
 
 const t0 = performance.now();
 const auth = createSurfaceAuthStorage();

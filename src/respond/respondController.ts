@@ -13,11 +13,11 @@ import {
   logInboundMessage,
   type AppLogger,
 } from '../logging/index.js';
-import type { RespondHandler } from './respondHandoff.js';
-import { stubRespondHandler } from './stubRespondHandler.js';
+import { noopRespondService } from './noopRespondService.js';
+import type { RespondService } from './respondService.js';
 
-export type RespondOrchestratorDependencies = {
-  handler?: RespondHandler;
+export type RespondControllerDependencies = {
+  service?: RespondService;
   logger?: AppLogger;
   now?: () => string;
   requestIdFactory?: () => RequestId;
@@ -50,17 +50,17 @@ type HandleRequestOptions = {
   logger?: AppLogger;
 };
 
-/** Validates inbound respond requests, emits `start`, then delegates to a handler. */
-export class RespondOrchestrator {
-  private readonly handler: RespondHandler;
+/** Validates inbound respond requests, emits `start`, then delegates to a service. */
+export class RespondController {
+  private readonly service: RespondService;
   private readonly logger: AppLogger;
   private readonly now: () => string;
   private readonly requestIdFactory: () => RequestId;
   private readonly sessionIdFactory: () => SessionId;
 
-  /** Creates an orchestrator with optional clock, id factories, and handoff handler. */
-  constructor(dependencies: RespondOrchestratorDependencies = {}) {
-    this.handler = dependencies.handler ?? stubRespondHandler;
+  /** Creates a controller with optional clock, id factories, and respond service. */
+  constructor(dependencies: RespondControllerDependencies = {}) {
+    this.service = dependencies.service ?? noopRespondService;
     this.logger = dependencies.logger ?? createRootLogger();
     this.now = dependencies.now ?? (() => new Date().toISOString());
     this.requestIdFactory =
@@ -71,7 +71,7 @@ export class RespondOrchestrator {
 
   /**
    * Validates `rawRequest`, yields `start` (or `validation_error`), then
-   * streams any events from the configured handoff handler.
+   * streams any events from the configured respond service.
    */
   async *handle(
     rawRequest: unknown,
@@ -80,7 +80,7 @@ export class RespondOrchestrator {
     const requestId = options.requestId ?? this.requestIdFactory();
     const baseLogger = options.logger ?? this.logger;
     const log = createChildLogger(baseLogger, {
-      component: 'respond.orchestrator',
+      component: 'respond.controller',
       request_id: requestId,
     });
     const validation = RespondRequestSchema.safeParse(rawRequest);
@@ -100,7 +100,7 @@ export class RespondOrchestrator {
     const startedAt = this.now();
     const sessionId = request.session_id ?? this.sessionIdFactory();
     const requestLog = createChildLogger(log, {
-      component: 'respond.orchestrator',
+      component: 'respond.controller',
       session_id: sessionId,
       user_id: request.user_id,
     });
@@ -123,7 +123,7 @@ export class RespondOrchestrator {
       started_at: startedAt,
     };
 
-    yield* this.handler.handle(request, {
+    yield* this.service.handleTurn(request, {
       requestId,
       sessionId,
       startedAt,

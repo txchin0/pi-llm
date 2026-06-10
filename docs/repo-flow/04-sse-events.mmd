@@ -1,0 +1,15 @@
+flowchart TD
+  %% SSE events the client receives
+  req["Validated request"] --> start["start<br/>RespondController"]
+  start --> ev["Streamed events<br/>mapPiEventToRespond"]
+
+  ev --> delta["delta · assistant text"]
+  ev --> think["thinking_delta · if show_thinking"]
+  ev --> tc["tool_call · name + input"]
+  ev --> tr["tool_result · output or error"]
+  ev --> usage["usage · token counts"]
+  ev --> final["final · finish_reason"]
+
+  ev --> err["error<br/>validation_error · session_busy · agent_error"]
+
+  schemas["src/contracts/respond.ts"] -.defines.-> start & delta & think & tc & tr & usage & final & err

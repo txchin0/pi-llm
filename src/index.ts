@@ -7,8 +7,8 @@ import {
   warnSurfaceLlmEndpoint,
 } from './config/surfaceAgent.js';
 import { createChildLogger, createRootLogger } from './logging/index.js';
-import { createSurfaceRespondHandler } from './runtime/surface/surfaceRespondHandler.js';
-import { SurfaceSessionRegistry } from './runtime/surface/surfaceSessionRegistry.js';
+import { createSurfaceRespondService } from './surface/surfaceRespondService.js';
+import { SurfaceSessionRegistry } from './surface/surfaceSessionRegistry.js';
 import { buildServer } from './server/buildServer.js';
 
 /** Builds the Fastify app and listens on `env.PORT`. */
@@ -29,8 +29,8 @@ export async function startServer(): Promise<void> {
     model,
     surfaceAgentConfig,
   });
-  const handler = createSurfaceRespondHandler({ registry, logger });
-  const app = buildServer({ logger, handler });
+  const service = createSurfaceRespondService({ registry, logger });
+  const app = buildServer({ logger, service });
 
   try {
     await app.listen({ host: listenHost, port: env.PORT });

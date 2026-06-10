@@ -7,9 +7,9 @@ import type {
 import type {
   SurfaceAgentConfig,
   SurfaceModel,
-} from '../../config/surfaceAgent.js';
-import { resolveUserMemoryWorkspace } from '../../config/surfaceAgent.js';
-import type { SessionId } from '../../contracts/respond.js';
+} from '../config/surfaceAgent.js';
+import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
+import type { SessionId } from '../contracts/respond.js';
 import { createSurfaceSession } from './createSurfaceSession.js';
 
 export type SurfaceSessionRegistryDependencies = {

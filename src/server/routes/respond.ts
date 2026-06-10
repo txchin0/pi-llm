@@ -1,25 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { RequestId } from '../../contracts/respond.js';
-import { RespondRequestSchema } from '../../contracts/respond.js';
 import {
   createChildLogger,
   logRespondSseEvent,
   type AppLogger,
 } from '../../logging/index.js';
-import type { RespondOrchestrator } from '../../runtime/respondOrchestrator.js';
+import type { RespondController } from '../../respond/respondController.js';
 import { writeSseEvent } from '../writeSseEvent.js';
 
 type RegisterRespondRouteOptions = {
-  orchestrator: RespondOrchestrator;
+  controller: RespondController;
   logger: AppLogger;
 };
-
-/** Returns the parsed request body when valid, otherwise the raw body for orchestrator validation. */
-function prepareRespondPayload(request: FastifyRequest): unknown {
-  const parsedRequest = RespondRequestSchema.safeParse(request.body);
-  return parsedRequest.success ? parsedRequest.data : request.body;
-}
 
 /** Hijacks the reply and sets unbuffered SSE response headers. */
 function writeSseHeaders(reply: FastifyReply): void {
@@ -39,13 +32,12 @@ function finalizeSseResponse(reply: FastifyReply): void {
   }
 }
 
-/** Registers `POST /v1/respond` and streams orchestrator SSE events to the client. */
+/** Registers `POST /v1/respond` and streams controller SSE events to the client. */
 export function registerRespondRoute(
   app: FastifyInstance,
   options: RegisterRespondRouteOptions,
 ): void {
   app.post('/v1/respond', async (request: FastifyRequest, reply: FastifyReply) => {
-    const payload = prepareRespondPayload(request);
     const requestId = request.id as RequestId;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
@@ -60,7 +52,7 @@ export function registerRespondRoute(
     let requestError: unknown;
 
     try {
-      for await (const event of options.orchestrator.handle(payload, {
+      for await (const event of options.controller.handle(request.body, {
         requestId,
         logger: log,
       })) {

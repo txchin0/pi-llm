@@ -8,20 +8,20 @@ import {
   type AppLogger,
 } from '../logging/index.js';
 import {
-  RespondOrchestrator,
-  type RespondOrchestratorDependencies,
-} from '../runtime/respondOrchestrator.js';
+  RespondController,
+  type RespondControllerDependencies,
+} from '../respond/respondController.js';
 import { registerRespondRoute } from './routes/respond.js';
 
-export type BuildServerOptions = RespondOrchestratorDependencies & {
+export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
 };
 
-/** Creates a Fastify instance with the respond orchestrator and `/v1/respond` route. */
+/** Creates a Fastify instance with the respond controller and `/v1/respond` route. */
 export function buildServer(options: BuildServerOptions = {}) {
-  const { logger = createRootLogger(), ...orchestratorOptions } = options;
+  const { logger = createRootLogger(), ...controllerOptions } = options;
   const requestIdFactory =
-    orchestratorOptions.requestIdFactory ??
+    controllerOptions.requestIdFactory ??
     (() => `req_${randomBytes(8).toString('hex')}`);
 
   const app = Fastify({
@@ -46,11 +46,11 @@ export function buildServer(options: BuildServerOptions = {}) {
     }
   });
 
-  const orchestrator = new RespondOrchestrator({
-    ...orchestratorOptions,
+  const controller = new RespondController({
+    ...controllerOptions,
     logger,
   });
-  registerRespondRoute(app, { orchestrator, logger });
+  registerRespondRoute(app, { controller, logger });
 
   return app;
 }

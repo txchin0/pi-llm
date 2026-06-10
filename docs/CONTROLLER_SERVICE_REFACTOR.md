@@ -2,7 +2,9 @@
 
 This document describes a proposed restructuring of the respond path in pi-llm. The goal is to align the codebase with a **controller–service–runner** pattern: clear boundaries, predictable naming, and room to add the worker agent and task queue without tangling Pi SDK mechanics into business logic.
 
-**Status:** Proposed — not yet implemented.
+**Status:** Implemented.
+
+**Layout:** `src/agent/`, `src/respond/`, `src/surface/` (see §5).
 
 **Related docs:** [DESIGN.md](../DESIGN.md), [AGENTS.md](../AGENTS.md)
 
@@ -10,18 +12,18 @@ This document describes a proposed restructuring of the respond path in pi-llm. 
 
 ## 1. Summary
 
-| Layer | Role | Current file(s) | Proposed file(s) |
-|-------|------|-----------------|------------------|
-| HTTP controller | SSE transport, headers, stream to client | `src/server/routes/respond.ts` | Same (minor cleanup) |
-| Application controller | Validate request, assign IDs, emit `start`, delegate | `src/runtime/respondOrchestrator.ts` | `respondController.ts` (rename optional) |
-| Service contract | Interface for “handle one chat turn” | `src/runtime/respondHandoff.ts` | `respondService.ts` |
-| Service implementation | Surface chat business flow | `src/runtime/surface/surfaceRespondHandler.ts` | `surfaceRespondService.ts` |
-| Pi runner | Subscribe, prompt, event queue, unsubscribe | Mixed into `surfaceRespondHandler.ts` | `runSurfacePrompt.ts` (new) |
-| Repository | Long-lived sessions keyed by `session_id` | `surfaceSessionRegistry.ts` | Same |
-| Agent factory | Pi harness setup (tools, cwd, system prompt) | `createSurfaceSession.ts` | Same |
-| Test double | No-op service for default `buildServer()` | `stubRespondHandler.ts` | `noopRespondService.ts` |
+| Layer | Role | File(s) |
+|-------|------|---------|
+| HTTP route | SSE transport, headers, stream to client | `src/server/routes/respond.ts` |
+| Application controller | Validate request, assign IDs, emit `start`, delegate | `src/respond/respondController.ts` |
+| Service contract | Interface for “handle one chat turn” | `src/respond/respondService.ts` |
+| Service implementation | Surface chat business flow | `src/surface/surfaceRespondService.ts` |
+| Pi runner | Subscribe, prompt, event queue, unsubscribe | `src/agent/runAgentPrompt.ts` |
+| Repository | Long-lived sessions keyed by `session_id` | `src/surface/surfaceSessionRegistry.ts` |
+| Agent factory | Pi harness setup (tools, cwd, system prompt) | `src/surface/createSurfaceSession.ts` |
+| Test double | No-op service for default `buildServer()` | `src/respond/noopRespondService.ts` |
 
-The refactor is mostly **renaming and one extraction**. No change to the HTTP contract (`POST /v1/respond` SSE events) or to `DESIGN.md` architecture.
+Renaming, folder restructure, and runner extraction. No change to the HTTP contract (`POST /v1/respond` SSE events) or to `DESIGN.md` architecture.
 
 ---
 
@@ -281,24 +283,28 @@ Pi harness configuration for a new conversation thread.
 
 ---
 
-## 5. Proposed file layout
+## 5. File layout (implemented)
 
 ```
-src/runtime/
-├── respondController.ts          # was respondOrchestrator.ts (rename optional)
-├── respondService.ts             # was respondHandoff.ts
-├── noopRespondService.ts         # was stubRespondHandler.ts
-└── surface/
-    ├── surfaceRespondService.ts  # was surfaceRespondHandler.ts (slimmed)
-    ├── runSurfacePrompt.ts       # NEW — extracted Pi streaming loop
-    ├── surfaceSessionRegistry.ts # unchanged
-    ├── createSurfaceSession.ts   # unchanged
-    ├── mapPiEventToRespond.ts    # unchanged
-    ├── enrichUserMessage.ts      # unchanged
-    └── ...
+src/
+├── agent/
+│   └── runAgentPrompt.ts           # shared Pi subscribe/prompt loop
+├── respond/
+│   ├── respondController.ts
+│   ├── respondService.ts
+│   └── noopRespondService.ts
+├── surface/
+│   ├── surfaceRespondService.ts
+│   ├── surfaceSessionRegistry.ts
+│   ├── createSurfaceSession.ts
+│   ├── mapPiEventToRespond.ts
+│   ├── enrichUserMessage.ts
+│   └── ...
+└── server/
+    └── routes/respond.ts
 ```
 
-`src/index.ts` wiring change (conceptual):
+`src/index.ts` wiring:
 
 ```typescript
 const service = createSurfaceRespondService({ registry, logger });
@@ -372,12 +378,7 @@ export class RespondController {
 }
 ```
 
-**Optional:** Keep `RespondOrchestrator` as a type alias during migration:
-
-```typescript
-/** @deprecated Use RespondController */
-export const RespondOrchestrator = RespondController;
-```
+No deprecation alias — all in-repo references were updated in one pass.
 
 ### 6.3 `respond.ts` — remove duplicate validation
 
@@ -396,71 +397,22 @@ for await (const event of options.controller.handle(request.body, {
 
 Single validation site = application controller.
 
-### 6.4 `runSurfacePrompt.ts` (new)
-
-Extract from `surfaceRespondHandler.ts`:
+### 6.4 `runAgentPrompt.ts` (implemented in `src/agent/`)
 
 ```typescript
-import type { AgentSession } from '@earendil-works/pi-coding-agent';
-import type { RespondSseEvent } from '../../contracts/respond.js';
+import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-export type SurfacePromptMapper = (
-  piEvent: unknown,
-) => RespondSseEvent[];
-
-export type RunSurfacePromptOptions = {
-  mapEvent: SurfacePromptMapper;
-};
-
-function waitForNextTick(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-/**
- * Subscribes to Pi session events, runs prompt(), and yields mapped SSE events
- * until the prompt completes and the event queue is drained.
- */
-export async function* runSurfacePrompt(
-  session: AgentSession,
-  message: string,
-  options: RunSurfacePromptOptions,
-): AsyncGenerator<RespondSseEvent> {
-  const queue: RespondSseEvent[] = [];
-  let done = false;
-  let promptError: unknown;
-
-  const unsubscribe = session.subscribe((event) => {
-    queue.push(...options.mapEvent(event));
-  });
-
-  const promptPromise = session
-    .prompt(message)
-    .catch((error: unknown) => {
-      promptError = error;
-    })
-    .finally(() => {
-      done = true;
-    });
-
-  try {
-    while (!done || queue.length > 0) {
-      if (queue.length > 0) {
-        yield queue.shift() as RespondSseEvent;
-        continue;
-      }
-      if (done) break;
-      await waitForNextTick();
-    }
-
-    await promptPromise;
-    if (promptError !== undefined) throw promptError;
-  } finally {
-    unsubscribe();
-  }
-}
+export type AgentPromptMapper = (event: AgentSessionEvent) => RespondSseEvent[];
 ```
 
-The mapper closure is built by the service so `runSurfacePrompt` stays ignorant of `RespondRequest` and `mapPiEventForRequest` state.
+Uses a **promise-backed queue** (not `setImmediate` polling): `subscribe` resolves a pending waiter when events arrive; the generator drains synchronously then awaits the next push.
+
+The mapper closure is built by the service so `runAgentPrompt` stays ignorant of `RespondRequest` and `mapPiEventForRequest` state.
+
+#### Known limitations (runner)
+
+- **No backpressure:** the in-memory event queue is unbounded. Assumes a fast local consumer (SSE route). Slow or stalled clients can grow memory without limit.
+- **Mapper errors:** `mapEvent` runs inside Pi's synchronous `subscribe` callback. Throws there surface in Pi's emit path — the service `try/catch` around `yield* runAgentPrompt(...)` covers **prompt/runner** failures only, not mapper throws.
 
 ### 6.5 `surfaceRespondService.ts` (slimmed handler)
 
@@ -497,7 +449,7 @@ export function createSurfaceRespondService(
       };
 
       try {
-        yield* runSurfacePrompt(
+        yield* runAgentPrompt(
           session,
           enrichUserMessage(request.message, now),
           {
@@ -666,10 +618,10 @@ src/worker/
 
 | Decision | Options | Recommendation |
 |----------|---------|----------------|
-| Rename orchestrator → controller | Yes / No | **Yes** — matches team mental model; optional alias for one release |
+| Rename orchestrator → controller | Yes / No | **Yes** — clean rename, no alias |
 | `handle` vs `handleTurn` on service | `handle` / `handleTurn` | **`handleTurn`** — disambiguates from HTTP handlers |
-| Keep `RespondOrchestrator` name | Keep / Rename | Rename if doing a single breaking PR; alias if migrating gradually |
-| Runner location | `surface/` vs `runtime/agent/` | **`surface/`** for now; move to `runtime/agent/` when worker runner exists |
+| Runner location | `surface/` vs `agent/` | **`src/agent/`** — shared by surface and future worker |
+| Queue mechanism | `setImmediate` poll / promise-backed | **Promise-backed** — lower latency, reusable for worker |
 | Error mapping in service vs runner | Service / Runner | **Service** — runner stays Pi-mechanics only |
 
 ---
@@ -677,7 +629,6 @@ src/worker/
 ## 12. Non-goals (this refactor)
 
 - Splitting into separate microservices or processes.
-- Moving `surface/` to top-level `src/surface/` bounded context (see prior structure review).
 - Changing SSE event shapes or `POST /v1/respond` contract.
 - Adding worker, queue, or tool gateway modules.
 - Replacing manual env parsing with Zod in config.

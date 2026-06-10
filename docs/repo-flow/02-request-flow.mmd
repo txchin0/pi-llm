@@ -1,0 +1,53 @@
+sequenceDiagram 
+  %% Request flow — one chat turn end-to-end
+  autonumber
+  participant Client as Chat client
+  participant Route as respond.ts
+  participant Ctrl as RespondController
+  participant Svc as SurfaceRespondService
+  participant Reg as SurfaceSessionRegistry
+  participant Pi as Pi AgentSession
+  participant LLM as LLM server
+  participant FS as Memory workspace
+
+  Client->>Route: POST /v1/respond JSON
+  Note over Client,Route: { user_id, message, session_id?, show_thinking? }
+
+  Route->>Route: SSE headers · hijack response
+  Route->>Ctrl: handle(body)
+
+  Ctrl->>Ctrl: RespondRequestSchema.safeParse()
+  alt invalid body
+    Ctrl-->>Route: error validation_error
+  else valid
+    Ctrl-->>Route: start (request_id, session_id, started_at)
+    Ctrl->>Svc: handleTurn(request, context)
+
+    Svc->>Reg: getOrCreate(sessionId, userId)
+    alt first turn for session_id
+      Reg->>Reg: createSurfaceSession()
+      Note over Reg,FS: cwd = user memory dir<br/>tools: read · ls · grep · find
+    end
+    Reg-->>Svc: AgentSession
+
+    alt session_busy
+      Svc-->>Route: error session_busy
+    else ready
+      Svc->>Svc: enrichUserMessage (+ timezone now)
+      Svc->>Pi: runAgentPrompt(session, message)
+      Pi->>LLM: streaming chat completion
+
+      loop Pi session events
+        Pi-->>Svc: text_delta · tool events · agent_end
+        Svc->>Svc: mapPiEventToRespond()
+        Svc-->>Route: delta · tool_call · tool_result · usage · final
+        opt agent uses filesystem tools
+          Pi->>FS: read / ls / grep / find
+          FS-->>Pi: results
+        end
+      end
+    end
+  end
+
+  Route->>Route: writeSseEvent() each event · log · close stream
+  Route-->>Client: text/event-stream

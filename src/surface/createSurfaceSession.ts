@@ -3,8 +3,8 @@ import type { AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent
 import type {
   SurfaceAgentConfig,
   SurfaceModel,
-} from '../../config/surfaceAgent.js';
-import { validateSurfaceLlmEndpoint } from '../../config/surfaceAgent.js';
+} from '../config/surfaceAgent.js';
+import { validateSurfaceLlmEndpoint } from '../config/surfaceAgent.js';
 import {
   AgentSession,
   createAgentSession,

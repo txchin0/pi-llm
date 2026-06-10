@@ -1,0 +1,83 @@
+flowchart TB
+  %% Directory map — what lives where in src/
+  subgraph entry["Entry & bootstrap"]
+    start["bootstrap/start.ts<br/>process entry · npm run dev"]
+    index["index.ts<br/>startServer() wires all dependencies"]
+    start --> index
+  end
+
+  subgraph config["config/"]
+    env["env.ts<br/>PORT · DATA_ROOT · LOG_* · TIMEZONE"]
+    surfaceCfg["surfaceAgent.ts<br/>LLM base URL · model · thinking level"]
+  end
+
+  subgraph server["server/ — Fastify HTTP"]
+    buildServer["buildServer.ts<br/>creates app + global error handler"]
+    respondRoute["routes/respond.ts<br/>POST /v1/respond → SSE stream"]
+    writeSse["writeSseEvent.ts<br/>format text/event-stream frames"]
+    buildServer --> respondRoute --> writeSse
+  end
+
+  subgraph respond["respond/ — controller / service split"]
+    controller["respondController.ts<br/>Zod validate · emit start · delegate"]
+    iface["respondService.ts<br/>RespondService interface"]
+    noop["noopRespondService.ts<br/>stub impl for tests"]
+    controller --> iface
+    iface -.-> noop
+  end
+
+  subgraph surface["surface/ — production RespondService"]
+    surfaceSvc["surfaceRespondService.ts<br/>createSurfaceRespondService()"]
+    registry["surfaceSessionRegistry.ts<br/>Map session_id → AgentSession"]
+    createSess["createSurfaceSession.ts<br/>Pi harness session factory"]
+    enrich["enrichUserMessage.ts<br/>prepend current time"]
+    mapper["mapPiEventToRespond.ts<br/>Pi events → SSE contract"]
+    sysPrompt["buildSurfaceSystemPrompt.ts"]
+    ensureWs["ensureUserWorkspace.ts"]
+    resLoader["createMinimalResourceLoader.ts"]
+    surfaceSvc --> registry --> createSess
+    createSess --> sysPrompt & ensureWs & resLoader
+    surfaceSvc --> enrich & mapper
+  end
+
+  subgraph agent["agent/ — shared Pi bridge"]
+    runPrompt["runAgentPrompt.ts<br/>subscribe · prompt() · yield mapped SSE"]
+  end
+
+  subgraph contracts["contracts/ — Zod API types"]
+    respondC["respond.ts<br/>request + all SSE event schemas"]
+    providerC["provider.ts<br/>finish_reason · usage"]
+  end
+
+  subgraph logging["logging/ — pino, DI only"]
+    rootLog["createRootLogger.ts"]
+    childLog["createChildLogger.ts<br/>correlation: request_id · session_id"]
+    logEvt["logRespondEvent.ts"]
+  end
+
+  subgraph external["Runtime dependencies"]
+    piSdk["@earendil-works/pi-coding-agent<br/>AgentSession · built-in tools"]
+    llm["OpenAI-compatible LLM<br/>e.g. llama-server /v1"]
+    disk["DATA_ROOT/users/{user_id}/memory<br/>Pi session cwd · markdown topics"]
+  end
+
+  subgraph planned["Planned — see DESIGN.md"]
+    worker["Worker agent · src/agents/"]
+    queue["Task queue · FIFO deferred work"]
+    gateway["Tool gateway · calendar · search · schedule-task"]
+  end
+
+  index --> env & surfaceCfg & buildServer & surfaceSvc & registry & rootLog
+  buildServer --> controller
+  surfaceSvc -.implements.-> iface
+  respondRoute --> controller
+  surfaceSvc --> runPrompt
+  createSess --> piSdk
+  runPrompt --> piSdk
+  piSdk --> llm & disk
+  controller & mapper --> respondC
+  mapper --> providerC
+  surfaceSvc -.future.-> gateway --> queue --> worker
+
+  classDef planned fill:#f5f5f5,stroke:#aaa,stroke-dasharray:6 4
+  class worker,queue,gateway planned

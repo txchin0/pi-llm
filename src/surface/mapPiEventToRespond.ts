@@ -3,13 +3,13 @@ import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 import type {
   ProviderFinishReason,
   ProviderUsage,
-} from '../../contracts/provider.js';
+} from '../contracts/provider.js';
 import type {
   RequestId,
   RespondRequest,
   RespondSseEvent,
   SessionId,
-} from '../../contracts/respond.js';
+} from '../contracts/respond.js';
 
 type ProviderStopReason =
   | 'stop'
