@@ -17,6 +17,7 @@ const model = resolveSurfaceModel(reg);
 const ws = resolveUserMemoryWorkspace(env.DATA_ROOT, 'timing-user');
 const session = await createSurfaceSession({
   userMemoryWorkspace: ws,
+  dataRoot: env.DATA_ROOT,
   model,
   authStorage: auth,
   modelRegistry: reg,

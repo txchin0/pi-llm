@@ -28,6 +28,7 @@ export async function startServer(): Promise<void> {
     modelRegistry,
     model,
     surfaceAgentConfig,
+    log: createChildLogger(logger, { component: 'surface' }),
   });
   const service = createSurfaceRespondService({ registry, logger });
   const app = buildServer({ logger, service });

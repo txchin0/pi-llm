@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 
-import { env } from '../config/env.js';
+import { env } from '../../config/env.js';
 
 /** Returns the current time as an ISO string in the configured timezone. */
 export function formatNowInTimezone(timezone: string = env.TIMEZONE): string {

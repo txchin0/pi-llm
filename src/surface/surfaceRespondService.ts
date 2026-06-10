@@ -1,7 +1,7 @@
 import { runAgentPrompt } from '../agent/runAgentPrompt.js';
 import type { AppLogger } from '../logging/index.js';
 import type { RespondContext, RespondService } from '../respond/respondService.js';
-import { enrichUserMessage, formatNowInTimezone } from './enrichUserMessage.js';
+import { enrichUserMessage, formatNowInTimezone } from './util/enrichUserMessage.js';
 import {
   createPiEventMapperState,
   mapPiEventForRequest,

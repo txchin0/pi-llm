@@ -10,6 +10,7 @@ import type {
 } from '../config/surfaceAgent.js';
 import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
+import type { AppLogger } from '../logging/types.js';
 import { createSurfaceSession } from './createSurfaceSession.js';
 
 export type SurfaceSessionRegistryDependencies = {
@@ -18,6 +19,7 @@ export type SurfaceSessionRegistryDependencies = {
   modelRegistry: ModelRegistry;
   model: SurfaceModel;
   surfaceAgentConfig: SurfaceAgentConfig;
+  log?: AppLogger;
 };
 
 /** Holds long-lived surface `AgentSession` instances keyed by server session id. */
@@ -28,6 +30,7 @@ export class SurfaceSessionRegistry {
   private readonly modelRegistry: ModelRegistry;
   private readonly model: SurfaceModel;
   private readonly surfaceAgentConfig: SurfaceAgentConfig;
+  private readonly log: AppLogger | undefined;
 
   /** Creates a registry with shared model and auth dependencies. */
   constructor(dependencies: SurfaceSessionRegistryDependencies) {
@@ -36,6 +39,7 @@ export class SurfaceSessionRegistry {
     this.modelRegistry = dependencies.modelRegistry;
     this.model = dependencies.model;
     this.surfaceAgentConfig = dependencies.surfaceAgentConfig;
+    this.log = dependencies.log;
   }
 
   /** Returns an existing session or creates one for the given ids. */
@@ -45,13 +49,17 @@ export class SurfaceSessionRegistry {
       return existing;
     }
 
-    const session = await createSurfaceSession({
+    const sessionOptions = {
       userMemoryWorkspace: resolveUserMemoryWorkspace(this.dataRoot, userId),
+      dataRoot: this.dataRoot,
       model: this.model,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
       surfaceAgentConfig: this.surfaceAgentConfig,
-    });
+    };
+    const session = await createSurfaceSession(
+      this.log ? { ...sessionOptions, log: this.log } : sessionOptions,
+    );
 
     this.sessions.set(sessionId, session);
     return session;
