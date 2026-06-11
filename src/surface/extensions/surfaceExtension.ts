@@ -5,6 +5,8 @@ import {
 } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 
+import type { TaskQueue } from '../../queue/sqliteTaskQueue.js';
+import type { AppLogger } from '../../logging/types.js';
 import {
   callExaWebSearch,
   closeExaMcp,
@@ -12,6 +14,7 @@ import {
   resolveExaApiKey,
 } from '../exaMcpClient.js';
 import { isPathInsideWorkspace } from '../util/isPathInsideWorkspace.js';
+import { executeScheduleTask, scheduleTaskParameters } from './scheduleTaskTool.js';
 
 const FILESYSTEM_READ_TOOLS = new Set(['read', 'ls', 'grep', 'find']);
 
@@ -26,8 +29,28 @@ const webSearchSchema = Type.Object({
   ),
 });
 
+export type SurfaceExtensionDependencies = {
+  taskQueue: TaskQueue;
+  userId: string;
+  sessionId: string;
+  contextTurnLimit: number;
+  log?: AppLogger;
+};
+
+/** Creates a Pi extension factory with injected queue and session dependencies. */
+export function createSurfaceExtensionFactory(
+  deps: SurfaceExtensionDependencies,
+): (pi: ExtensionAPI) => void {
+  return (pi) => {
+    createSurfaceExtension(pi, deps);
+  };
+}
+
 /** Registers surface tools and enforces memory-workspace path sandboxing. */
-export function createSurfaceExtension(pi: ExtensionAPI): void {
+export function createSurfaceExtension(
+  pi: ExtensionAPI,
+  deps: SurfaceExtensionDependencies,
+): void {
   pi.on('tool_call', async (event, ctx) => {
     if (!FILESYSTEM_READ_TOOLS.has(event.toolName)) {
       return undefined;
@@ -95,6 +118,23 @@ export function createSurfaceExtension(pi: ExtensionAPI): void {
           details: {},
         };
       }
+    },
+  });
+
+  pi.registerTool({
+    name: 'schedule_task',
+    label: 'schedule_task',
+    description:
+      'Enqueue background work for a worker agent when a write or unsupported action is needed.',
+    promptSnippet: 'Schedule deferred background work',
+    promptGuidelines: [
+      'Use schedule_task for any write, calendar change, or action you cannot complete with read-only tools.',
+      'Pass a clear description of what should be done; confirm deferral to the user in natural language.',
+      'Never claim a write is complete unless schedule_task was called successfully.',
+    ],
+    parameters: scheduleTaskParameters,
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      return executeScheduleTask(deps, params, ctx);
     },
   });
 

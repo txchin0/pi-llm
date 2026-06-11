@@ -569,18 +569,25 @@ This is the primary sandbox mechanism — tools resolve paths relative to `cwd`.
 import { Type } from "typebox";
 import { defineTool } from "@earendil-works/pi-coding-agent";
 
-const scheduleTaskTool = defineTool({
+// pi-llm registers schedule_task via Pi extension (surfaceExtension.ts), not defineTool().
+pi.registerTool({
   name: "schedule_task",
-  label: "Schedule Task",
-  description: "Enqueue background work for the worker agent",
   parameters: Type.Object({
-    task_type: Type.String(),
-    description: Type.String(),
+    description: Type.String(), // sole agent-facing param
   }),
-  execute: async (_toolCallId, params) => ({
-    content: [{ type: "text", text: `Task queued: ${params.description}` }],
-    details: { task_type: params.task_type },
-  }),
+  async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    const context = extractRecentTurns(ctx.sessionManager, turnLimit);
+    const record = await taskQueue.enqueue({
+      userId,
+      sessionId,
+      description: params.description,
+      context,
+    });
+    return {
+      content: [{ type: "text", text: `Task queued (id: ${record.id}): ${record.description}` }],
+      details: { task_id: record.id },
+    };
+  },
 });
 ```
 
@@ -940,41 +947,43 @@ npx tsx examples/sdk/01-minimal.ts
 
 Based on [DESIGN.md](../DESIGN.md) and the respond path in `src/respond/respondController.ts` + `src/surface/surfaceRespondService.ts`:
 
-### 19.1 Surface Agent Session Setup (Target)
+### 19.1 Surface Agent Session Setup (current)
+
+Implemented in `src/surface/createSurfaceSession.ts`. Custom tools (`web_search`, `schedule_task`) are registered via `createSurfaceExtensionFactory()` in `src/surface/extensions/surfaceExtension.ts`, not `customTools`:
 
 ```typescript
-const authStorage = AuthStorage.create(agentDir);
-authStorage.setRuntimeApiKey(provider, process.env.API_KEY!);
-const modelRegistry = ModelRegistry.create(authStorage);
-
-const loader = new DefaultResourceLoader({
+const resourceLoader = await createSurfaceResourceLoader({
   cwd: userMemoryWorkspace,
-  agentDir,
-  systemPromptOverride: () => buildSurfaceSystemPrompt(user), // set once
-  appendSystemPromptOverride: () => [],  // no accidental appends
-  agentsFilesOverride: () => ({ agentsFiles: [] }),  // or inject memory index
-  noExtensions: true,  // unless needed
+  dataRoot,
+  systemPrompt: buildSurfaceSystemPrompt(),
+  settingsManager,
+  extensionFactories: [
+    createSurfaceExtensionFactory({
+      taskQueue,
+      userId,
+      sessionId,
+      contextTurnLimit: env.TASK_CONTEXT_TURN_LIMIT,
+    }),
+  ],
 });
-await loader.reload();
-
-const model = getModel("anthropic", "claude-sonnet-4-20250514");
 
 const { session } = await createAgentSession({
   cwd: userMemoryWorkspace,
   model,
   thinkingLevel: "off",
-  tools: ["read", "ls", "grep", "find"],
-  customTools: [calendarReadTool, webSearchTool, scheduleTaskTool],
+  tools: ["read", "ls", "grep", "find", "web_search", "schedule_task"],
   authStorage,
   modelRegistry,
-  resourceLoader: loader,
+  resourceLoader,
   sessionManager: SessionManager.inMemory(userMemoryWorkspace),
   settingsManager: SettingsManager.inMemory({
-    compaction: { enabled: true },
-    retry: { enabled: true, maxRetries: 3 },
+    compaction: { enabled: false },
+    retry: { enabled: true, maxRetries: 2 },
   }),
 });
 ```
+
+`schedule_task` accepts only `description`. The server injects `userId`, `sessionId`, and `context` (last N conversation turns from `ctx.sessionManager`) at execute time.
 
 ### 19.2 User Message Enrichment
 

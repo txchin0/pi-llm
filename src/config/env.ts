@@ -96,6 +96,22 @@ function parseLogPretty(
   throw new Error(`Invalid LOG_PRETTY value: ${value}. Expected true or false.`);
 }
 
+/** Parses `TASK_CONTEXT_TURN_LIMIT`, defaulting to 3 when unset. */
+function parseTaskContextTurnLimit(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') {
+    return 3;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(
+      `Invalid TASK_CONTEXT_TURN_LIMIT value: ${value}. Expected a positive integer.`,
+    );
+  }
+
+  return parsed;
+}
+
 /** Parses `TIMEZONE` (IANA), defaulting to Australia/Sydney when unset. */
 function parseTimezone(value: string | undefined): string {
   const zone =
@@ -119,6 +135,9 @@ export const env = {
   LOG_LEVEL: parseLogLevel(process.env.LOG_LEVEL, nodeEnv),
   LOG_PRETTY: parseLogPretty(process.env.LOG_PRETTY, nodeEnv),
   TIMEZONE: parseTimezone(process.env.TIMEZONE),
+  TASK_CONTEXT_TURN_LIMIT: parseTaskContextTurnLimit(
+    process.env.TASK_CONTEXT_TURN_LIMIT,
+  ),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
   isProd: nodeEnv === 'production',

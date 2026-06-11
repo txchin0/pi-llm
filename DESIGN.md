@@ -96,12 +96,14 @@ Volatile context such as current date and time is not part of the system prompt.
 | find | Pi built-in | Read | Locate files by name or pattern in memory |
 | Calendar read | Custom | Read | View upcoming events and availability |
 | Web search | Custom | Read | Retrieve external information |
-| Schedule task | Custom | Queue write | Enqueue work for the worker agent |
+| schedule_task | Custom (Pi extension) | Queue write | Enqueue work for the worker agent |
+
+`web_search` and `schedule_task` are registered in `src/surface/extensions/surfaceExtension.ts` via a per-session extension factory.
 
 ### 3.5 Behavioral Rules
 
 - Prefer answering from filesystem reads and the memory index before scheduling work.
-- Never claim a write operation is complete unless it was a read-only action.
+- Never claim a write operation is complete unless `schedule_task` was called successfully for that work.
 - When scheduling, give the user a clear confirmation in natural language.
 - Keep responses short unless the user asks for detail.
 - If uncertain whether a task is needed, ask a brief clarifying question rather than queueing unnecessarily.
@@ -136,9 +138,8 @@ The worker agent executes tasks dequeued from the task queue. It has write acces
 
 Set once when the worker session is created for the task. Includes:
 
-- Task type, description, and structured context from the queue entry.
+- Task description and server-built `context.turns` conversation excerpt from the queue entry.
 - Memory index snapshot and instructions on memory layout (same format as surface agent).
-- Relevant conversation excerpt linked from the originating user message, if available.
 - Instructions to complete the task, update memory by reading and writing markdown topic files (and updating the index file when topics are created or summaries change), and produce a structured result summary.
 
 ### 4.4 Available Tools (MVP)
@@ -165,19 +166,33 @@ Each completed task stores a structured result on the task record: success or fa
 
 ### 5.1 Role
 
-The task queue decouples user-facing latency from background execution. It is a FIFO store of work items created by the surface agent's schedule-task tool.
+The task queue decouples user-facing latency from background execution. It is a FIFO store of work items created by the surface agent's `schedule_task` tool.
 
 ### 5.2 Task Structure
 
 Each task includes:
 
-- Unique identifier.
-- Task type (e.g. set reminder, update memory, calendar write, custom).
-- Human-readable description for logging and optional user display.
-- Structured context object with machine-usable parameters extracted from conversation.
-- Optional link to the originating user message or session turn.
-- Optional priority (reserved for post-MVP; MVP treats all tasks as normal priority).
+- Unique identifier (`task_{hex}`, server-generated).
+- `user_id` — owning user (server-injected, not a tool parameter).
+- `description` — free-form text from the surface agent's `schedule_task` call (sole agent-facing parameter).
+- `context` — server-built JSON, not provided by the agent (see §5.7).
+- `session_id` — optional link to the originating conversation thread (server-injected).
 - Status, timestamps, retry count, result, and error message.
+
+Reserved for later bricks: `task_type`, priority, and structured context fields beyond the conversation excerpt.
+
+**`context` shape (current):**
+
+```json
+{
+  "turns": [
+    { "role": "user", "content": "..." },
+    { "role": "assistant", "content": "..." }
+  ]
+}
+```
+
+At enqueue time the server snapshots the last N user/assistant turn pairs from the Pi session (`TASK_CONTEXT_TURN_LIMIT`, default 3). Volatile time prefixes added by the server to user messages are stripped before storage.
 
 ### 5.3 Lifecycle
 
@@ -187,6 +202,8 @@ pending → running → completed
 ```
 
 ### 5.4 Processing Model
+
+**Not yet implemented:** the worker loop and idle detection below are design targets; enqueue and persistence are live.
 
 - One task is dequeued and processed per idle window in MVP to avoid starving chat.
 - Idle is defined as no active surface agent request within a configurable timeout (e.g. 30 seconds), or on a periodic poll interval as a fallback.
@@ -200,6 +217,19 @@ Worker execution should be safe to retry. Write tools should check for existing 
 ### 5.6 User Visibility
 
 The surface agent can answer questions about pending or recently completed tasks via a read tool or server API wrapping task list state. MVP may defer explicit "what's in my queue?" support if not essential.
+
+### 5.7 Current implementation (pi-llm)
+
+| Piece | Location |
+|-------|----------|
+| Types and validation | `src/queue/taskTypes.ts` |
+| Drizzle schema + migration | `src/queue/schema.ts`, `drizzle/` |
+| SQLite repository | `src/queue/sqliteTaskQueue.ts` |
+| Conversation excerpt builder | `src/queue/extractRecentTurns.ts` |
+| Surface tool | `src/surface/extensions/scheduleTaskTool.ts`, registered in `surfaceExtension.ts` |
+| Bootstrap wiring | `src/index.ts` creates queue; `SurfaceSessionRegistry` passes queue into session factory |
+
+Persistence: single SQLite database at `{DATA_ROOT}/tasks.sqlite`. New tasks are inserted with `status: pending`. Logging: `task.enqueued` at info (`task_id`, `user_id`, `session_id`); `description` and `context` at debug only.
 
 ---
 
@@ -249,13 +279,13 @@ grep and find over the workspace. Semantic or embedding-based search is out of s
 
 ### 7.1 Trust Model
 
-Agents run inside the Pi harness. Filesystem access is provided by Pi built-in tools scoped to the user's memory workspace via session cwd and tool registration. Custom tools (calendar, web search, schedule-task) are implemented server-side and executed through a gateway that checks role and operation type.
+Agents run inside the Pi harness. Filesystem access is provided by Pi built-in tools scoped to the user's memory workspace via session cwd and tool registration. Custom tools (calendar, web search, `schedule_task`) are implemented server-side. `web_search` and `schedule_task` run inside the surface Pi extension today; a dedicated gateway module may consolidate permission checks later.
 
 ### 7.2 Enforcement Layers
 
 1. **Tool registration.** Surface and worker sessions are created with disjoint tool sets. The surface agent receives read-only built-ins; write and edit are omitted. The worker receives full filesystem built-ins for memory.
 2. **Cwd scoping.** Both agents have session cwd set to the user's memory workspace. Pi built-in tools resolve paths relative to this root.
-3. **Gateway for custom tools.** Calendar, web search, and schedule-task execute in server code with permission checks. Schedule-task is surface-only.
+3. **Gateway for custom tools.** Calendar, web search, and `schedule_task` execute in server code with permission checks. `schedule_task` is surface-only and is registered only on surface sessions.
 4. **Path hardening.** The server rejects workspace roots outside the user's data namespace. Path traversal and symlink escape within tool arguments are blocked.
 5. **Audit logging.** Tool name, user, timestamp, and outcome are logged for debugging and accountability.
 
@@ -295,7 +325,7 @@ Lower-level `pi-agent-core` may be considered later if the coding-agent layer ad
 
 **Built-in (Pi harness):** Filesystem tools operate directly on the memory workspace via session cwd. No custom wrappers needed for memory read or write — memory is the workspace.
 
-**Custom (server gateway):** calendar read, calendar write, web search, and schedule-task are defined as Pi custom tools whose execute handlers delegate to server-side gateway functions.
+**Custom (server / Pi extension):** calendar read, calendar write, and web search are Pi custom tools. `schedule_task` is a Pi extension tool whose execute handler enqueues to SQLite and builds `context` from session history.
 
 ### 8.4 Event Handling
 
@@ -409,7 +439,7 @@ All per-user data under a single root:
 
 ### 13.2 Task Persistence
 
-SQLite or equivalent embedded store for MVP: tasks, status, timestamps, results, retry counts.
+SQLite at `{DATA_ROOT}/tasks.sqlite` (Drizzle + better-sqlite3): tasks, status, timestamps, JSON `context`, results, retry counts.
 
 ### 13.3 Pi Session Persistence
 
@@ -442,8 +472,8 @@ Authentication, encryption at rest, and network exposure controls when moving be
 ### 15.1 In Scope
 
 - Chat API with streaming responses.
-- Surface agent with thinking off, read-only Pi filesystem tools, and schedule-task.
-- FIFO task queue with idle-triggered worker processing.
+- Surface agent with thinking off, read-only Pi filesystem tools, `web_search`, and `schedule_task`.
+- FIFO task queue persistence and enqueue via `schedule_task` (worker loop pending).
 - Worker agent with Pi write/edit filesystem tools for memory and custom calendar write tools.
 - Memory workspace with index and markdown topic files.
 - Tool gateway with role-based permissions.
@@ -472,7 +502,7 @@ User sends message. Server attaches current time to the message. Surface agent r
 
 ### 16.2 Deferred Reminder
 
-User asks to set a reminder. Surface agent may read calendar for context. Surface agent calls schedule-task. Server enqueues task and surface confirms deferral. After idle, worker runs, writes calendar event and optionally edits memory files. Task marked completed.
+User asks to set a reminder. Surface agent may read calendar for context. Surface agent calls `schedule_task` with a description. Server enqueues a `pending` task (with recent conversation turns in `context`) and surface confirms deferral. After idle, worker runs, writes calendar event and optionally edits memory files. Task marked completed.
 
 ### 16.3 Memory Recall
 
@@ -498,7 +528,7 @@ Structured logs for chat requests, tool invocations, task state transitions, and
 
 ### 17.3 Configuration
 
-Environment-driven settings: idle timeout, retry limits, model ids, data root path, provider selection for calendar and search.
+Environment-driven settings: idle timeout, retry limits, model ids, data root path, provider selection for calendar and search, `TASK_CONTEXT_TURN_LIMIT` (conversation turns snapshotted into queued tasks, default 3).
 
 ---
 
@@ -537,6 +567,6 @@ Environment-driven settings: idle timeout, retry limits, model ids, data root pa
 | Task queue | FIFO store of deferred work items |
 | Memory / workspace | User-scoped directory of markdown topic files and index; Pi session cwd for both agents |
 | Tool gateway | Server layer that executes and permission-checks all agent tool calls |
-| Schedule task | Surface-only tool that enqueues work for the worker |
+| schedule_task | Surface-only Pi extension tool that enqueues work for the worker |
 | Atomic note | Single bullet-point fact within a memory topic file |
 | Idle window | Period with no active chat request when the worker may run |

@@ -285,9 +285,12 @@ If the stream ends without `final` or `error`, the frontend marks the turn compl
 
 ## Implementation checklist for pi-llm
 
-- [ ] `POST /v1/respond` accepting the JSON body above
-- [ ] SSE streaming with all eight event types
-- [ ] Per-user, per-session conversation state (`user_id` + `session_id`)
-- [ ] Tool lifecycle events (`tool_call` / `tool_result`) during agent runs
-- [ ] Unbuffered SSE (no response buffering through proxies)
-- [ ] Listen on port 3000 by default (or document proxy env override)
+- [x] `POST /v1/respond` accepting the JSON body above
+- [x] SSE streaming with all eight event types
+- [x] Per-user, per-session conversation state (`user_id` + `session_id`)
+- [x] Tool lifecycle events (`tool_call` / `tool_result`) during agent runs
+- [x] Unbuffered SSE (no response buffering through proxies)
+- [x] Listen on port 3000 by default (or document proxy env override)
+- [x] Surface `web_search` and `schedule_task` tools (see [DESIGN.md](DESIGN.md) §5.7)
+- [ ] Worker loop consuming queued tasks
+- [ ] Task list HTTP API / frontend queue view

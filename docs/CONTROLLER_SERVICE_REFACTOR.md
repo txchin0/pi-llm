@@ -630,7 +630,7 @@ src/worker/
 
 - Splitting into separate microservices or processes.
 - Changing SSE event shapes or `POST /v1/respond` contract.
-- Adding worker, queue, or tool gateway modules.
+- Adding worker, queue, or tool gateway modules. *(Task queue enqueue + `schedule_task` were added later in `src/queue/` — see DESIGN.md §5.7.)*
 - Replacing manual env parsing with Zod in config.
 
 ---

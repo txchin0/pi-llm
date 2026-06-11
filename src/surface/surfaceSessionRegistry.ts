@@ -11,6 +11,7 @@ import type {
 import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import type { AppLogger } from '../logging/types.js';
+import type { TaskQueue } from '../queue/sqliteTaskQueue.js';
 import { createSurfaceSession } from './createSurfaceSession.js';
 
 export type SurfaceSessionRegistryDependencies = {
@@ -19,6 +20,8 @@ export type SurfaceSessionRegistryDependencies = {
   modelRegistry: ModelRegistry;
   model: SurfaceModel;
   surfaceAgentConfig: SurfaceAgentConfig;
+  taskQueue: TaskQueue;
+  contextTurnLimit: number;
   log?: AppLogger;
 };
 
@@ -30,6 +33,8 @@ export class SurfaceSessionRegistry {
   private readonly modelRegistry: ModelRegistry;
   private readonly model: SurfaceModel;
   private readonly surfaceAgentConfig: SurfaceAgentConfig;
+  private readonly taskQueue: TaskQueue;
+  private readonly contextTurnLimit: number;
   private readonly log: AppLogger | undefined;
 
   /** Creates a registry with shared model and auth dependencies. */
@@ -39,6 +44,8 @@ export class SurfaceSessionRegistry {
     this.modelRegistry = dependencies.modelRegistry;
     this.model = dependencies.model;
     this.surfaceAgentConfig = dependencies.surfaceAgentConfig;
+    this.taskQueue = dependencies.taskQueue;
+    this.contextTurnLimit = dependencies.contextTurnLimit;
     this.log = dependencies.log;
   }
 
@@ -50,12 +57,16 @@ export class SurfaceSessionRegistry {
     }
 
     const sessionOptions = {
+      userId,
+      sessionId,
       userMemoryWorkspace: resolveUserMemoryWorkspace(this.dataRoot, userId),
       dataRoot: this.dataRoot,
       model: this.model,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
       surfaceAgentConfig: this.surfaceAgentConfig,
+      taskQueue: this.taskQueue,
+      contextTurnLimit: this.contextTurnLimit,
     };
     const session = await createSurfaceSession(
       this.log ? { ...sessionOptions, log: this.log } : sessionOptions,
