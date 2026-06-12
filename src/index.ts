@@ -90,7 +90,7 @@ export async function startServer(): Promise<void> {
 
   const service = createSurfaceRespondService({ registry, logger });
 
-  const app = buildServer({ logger, service });
+  const app = buildServer({ logger, service, taskQueue });
 
 
 

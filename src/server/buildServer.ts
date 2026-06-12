@@ -7,19 +7,23 @@ import {
   createRootLogger,
   type AppLogger,
 } from '../logging/index.js';
+import type { TaskQueue } from '../queue/sqliteTaskQueue.js';
 import {
   RespondController,
   type RespondControllerDependencies,
 } from '../respond/respondController.js';
+import { ListTasksController } from '../tasks/listTasksController.js';
 import { registerRespondRoute } from './routes/respond.js';
+import { registerTasksRoute } from './routes/tasks.js';
 
 export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
+  taskQueue: TaskQueue;
 };
 
-/** Creates a Fastify instance with the respond controller and `/v1/respond` route. */
-export function buildServer(options: BuildServerOptions = {}) {
-  const { logger = createRootLogger(), ...controllerOptions } = options;
+/** Creates a Fastify instance with respond and tasks routes. */
+export function buildServer(options: BuildServerOptions) {
+  const { logger = createRootLogger(), taskQueue, ...controllerOptions } = options;
   const requestIdFactory =
     controllerOptions.requestIdFactory ??
     (() => `req_${randomBytes(8).toString('hex')}`);
@@ -51,6 +55,9 @@ export function buildServer(options: BuildServerOptions = {}) {
     logger,
   });
   registerRespondRoute(app, { controller, logger });
+
+  const listTasksController = new ListTasksController({ taskQueue, logger });
+  registerTasksRoute(app, { controller: listTasksController, logger });
 
   return app;
 }

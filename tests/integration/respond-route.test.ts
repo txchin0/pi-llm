@@ -25,10 +25,12 @@ function parseSsePayload(payload: string): ParsedSseEvent[] {
 describe('POST /v1/respond', () => {
   async function createApp() {
     const { buildServer } = await import('../../src/server/buildServer.js');
+    const { noopTaskQueue } = await import('../../src/queue/noopTaskQueue.js');
     return buildServer({
       now: () => '2026-06-09T12:00:00.000Z',
       requestIdFactory: () => 'req_test00000001',
       sessionIdFactory: () => 'sess_test00000001',
+      taskQueue: noopTaskQueue,
     });
   }
 

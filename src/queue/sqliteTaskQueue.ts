@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import Database from 'better-sqlite3';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
@@ -13,15 +13,23 @@ import {
   EnqueueTaskInputSchema,
   TaskContextSchema,
   TaskRecordSchema,
+  TaskListRecordSchema,
   type EnqueueTaskInput,
+  type TaskListRecord,
   type TaskRecord,
   type TaskStatus,
 } from './taskTypes.js';
 
+export type ListTasksOptions = {
+  statuses: TaskStatus[];
+  limit?: number;
+};
+
 export type TaskQueue = {
   enqueue(input: EnqueueTaskInput): Promise<TaskRecord>;
   getById(userId: string, taskId: string): Promise<TaskRecord | null>;
-  listPending(userId: string, limit?: number): Promise<TaskRecord[]>;
+  listPending(userId: string, limit?: number): Promise<TaskListRecord[]>;
+  listByUser(userId: string, options: ListTasksOptions): Promise<TaskListRecord[]>;
 };
 
 export type SqliteTaskQueue = TaskQueue & {
@@ -37,6 +45,32 @@ export type CreateSqliteTaskQueueOptions = {
 /** Generates a unique task identifier. */
 function createTaskId(): string {
   return `task_${randomBytes(8).toString('hex')}`;
+}
+
+type TaskListRow = Pick<
+  typeof tasks.$inferSelect,
+  | 'id'
+  | 'description'
+  | 'status'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'retryCount'
+  | 'result'
+  | 'errorMessage'
+>;
+
+/** Maps a summary row to a validated list record without parsing context. */
+function mapRowToTaskListRecord(row: TaskListRow): TaskListRecord {
+  return TaskListRecordSchema.parse({
+    id: row.id,
+    description: row.description,
+    status: row.status,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    retryCount: row.retryCount,
+    result: row.result,
+    errorMessage: row.errorMessage,
+  });
 }
 
 /** Maps a Drizzle row to a validated task record. */
@@ -128,15 +162,34 @@ export async function createSqliteTaskQueue(
       return row ? mapRowToTaskRecord(row) : null;
     },
 
-    async listPending(userId, limit = 100) {
+    async listByUser(userId, options) {
+      const limit = options.limit ?? 100;
       const rows = await db
-        .select()
+        .select({
+          id: tasks.id,
+          description: tasks.description,
+          status: tasks.status,
+          createdAt: tasks.createdAt,
+          updatedAt: tasks.updatedAt,
+          retryCount: tasks.retryCount,
+          result: tasks.result,
+          errorMessage: tasks.errorMessage,
+        })
         .from(tasks)
-        .where(and(eq(tasks.userId, userId), eq(tasks.status, 'pending')))
-        .orderBy(asc(tasks.createdAt))
+        .where(
+          and(
+            eq(tasks.userId, userId),
+            inArray(tasks.status, options.statuses),
+          ),
+        )
+        .orderBy(asc(tasks.createdAt), asc(tasks.id))
         .limit(limit);
 
-      return rows.map((row) => mapRowToTaskRecord(row));
+      return rows.map((row) => mapRowToTaskListRecord(row));
+    },
+
+    async listPending(userId, limit = 100) {
+      return queue.listByUser(userId, { statuses: ['pending'], limit });
     },
   };
 

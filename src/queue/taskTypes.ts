@@ -46,3 +46,17 @@ export const TaskRecordSchema = z.object({
 });
 
 export type TaskRecord = z.infer<typeof TaskRecordSchema>;
+
+/** Task fields exposed by list endpoints without conversation context. */
+export const TaskListRecordSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  status: TaskStatusSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  retryCount: z.number().int().nonnegative(),
+  result: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+});
+
+export type TaskListRecord = z.infer<typeof TaskListRecordSchema>;
