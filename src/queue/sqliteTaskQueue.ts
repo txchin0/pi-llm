@@ -9,28 +9,16 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { AppLogger } from '../logging/types.js';
 import { tasks } from './schema.js';
+import type { TaskQueue } from './taskQueue.js';
 import {
   EnqueueTaskInputSchema,
   TaskContextSchema,
   TaskRecordSchema,
   TaskListRecordSchema,
-  type EnqueueTaskInput,
   type TaskListRecord,
   type TaskRecord,
   type TaskStatus,
 } from './taskTypes.js';
-
-export type ListTasksOptions = {
-  statuses: TaskStatus[];
-  limit?: number;
-};
-
-export type TaskQueue = {
-  enqueue(input: EnqueueTaskInput): Promise<TaskRecord>;
-  getById(userId: string, taskId: string): Promise<TaskRecord | null>;
-  listPending(userId: string, limit?: number): Promise<TaskListRecord[]>;
-  listByUser(userId: string, options: ListTasksOptions): Promise<TaskListRecord[]>;
-};
 
 export type SqliteTaskQueue = TaskQueue & {
   close(): void;
@@ -186,10 +174,6 @@ export async function createSqliteTaskQueue(
         .limit(limit);
 
       return rows.map((row) => mapRowToTaskListRecord(row));
-    },
-
-    async listPending(userId, limit = 100) {
-      return queue.listByUser(userId, { statuses: ['pending'], limit });
     },
   };
 

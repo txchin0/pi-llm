@@ -2,7 +2,7 @@ import { Type } from 'typebox';
 import { z } from 'zod';
 
 import { extractRecentTurns } from '../../queue/extractRecentTurns.js';
-import type { TaskQueue } from '../../queue/sqliteTaskQueue.js';
+import type { TaskQueue } from '../../queue/taskQueue.js';
 import type { ExtensionContext } from '@earendil-works/pi-coding-agent';
 import type { AppLogger } from '../../logging/types.js';
 

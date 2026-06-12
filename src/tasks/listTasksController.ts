@@ -1,13 +1,12 @@
 import {
   ListTasksQuerySchema,
-  toTaskSummary,
   type ListTasksResponse,
 } from '../contracts/tasks.js';
 import { createChildLogger, createRootLogger, type AppLogger } from '../logging/index.js';
-import type { TaskQueue } from '../queue/sqliteTaskQueue.js';
+import type { TaskListService } from './taskListService.js';
 
 export type ListTasksControllerDependencies = {
-  taskQueue: TaskQueue;
+  service: TaskListService;
   logger?: AppLogger;
 };
 
@@ -30,14 +29,14 @@ type HandleOptions = {
   logger?: AppLogger;
 };
 
-/** Validates list-tasks queries, applies HTTP defaults, and delegates to the queue. */
+/** Validates list-tasks queries and delegates to the task list service. */
 export class ListTasksController {
-  private readonly taskQueue: TaskQueue;
+  private readonly service: TaskListService;
   private readonly logger: AppLogger;
 
-  /** Creates a controller with the task queue and optional logger. */
+  /** Creates a controller with the task list service and optional logger. */
   constructor(dependencies: ListTasksControllerDependencies) {
-    this.taskQueue = dependencies.taskQueue;
+    this.service = dependencies.service;
     this.logger = dependencies.logger ?? createRootLogger();
   }
 
@@ -72,22 +71,15 @@ export class ListTasksController {
       user_id: query.userId,
     });
 
-    const records = await this.taskQueue.listByUser(query.userId, {
-      statuses: query.statuses,
-      limit: query.limit,
-    });
-
-    const body: ListTasksResponse = {
-      tasks: records.map((record) => toTaskSummary(record)),
-    };
+    const body = await this.service.listTasks(query);
 
     requestLog.info(
       {
-        event: 'tasks.list.completed',
+        event: 'tasks.list.succeeded',
         status_filter: query.statuses,
         task_count: body.tasks.length,
       },
-      'tasks list completed',
+      'tasks list succeeded',
     );
 
     return { status: 200, body };

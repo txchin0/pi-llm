@@ -77,17 +77,28 @@ export function mapUsage(usage: AssistantUsageSlice): ProviderUsage {
   };
 }
 
+/** Returns true when a Pi message has assistant completion fields. */
+function isAssistantMessageSlice(
+  message: { role: string },
+): message is AssistantMessageSlice {
+  return (
+    message.role === 'assistant' &&
+    'usage' in message &&
+    'stopReason' in message
+  );
+}
+
 /** Returns the last assistant message from an agent_end payload. */
 function findLastAssistantMessage(
   messages: readonly { role: string }[],
 ): AssistantMessageSlice | undefined {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
-    if (message?.role !== 'assistant') {
+    if (message === undefined || !isAssistantMessageSlice(message)) {
       continue;
     }
 
-    return message as AssistantMessageSlice;
+    return message;
   }
 
   return undefined;
@@ -215,7 +226,7 @@ export function mapPiEventToRespond(
 
 export type MapPiEventOptions = {
   request: RespondRequest;
-  context: PiEventMapperContext;
+  context: Omit<PiEventMapperContext, 'showThinking'>;
   state: PiEventMapperState;
 };
 

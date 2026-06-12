@@ -4,7 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 const EXA_MCP_SERVER = 'https://mcp.exa.ai/mcp';
 const DEFAULT_MAX_RESPONSE_BYTES = 10 * 1024;
 
-let exaMcpClientPromise: Promise<Client> | undefined;
+const exaMcpClients = new Map<string, Promise<Client>>();
 
 /** Builds the Exa MCP URL, optionally scoped to web search only. */
 export function buildExaMcpUrl(apiKey?: string): URL {
@@ -16,28 +16,38 @@ export function buildExaMcpUrl(apiKey?: string): URL {
   return url;
 }
 
-/** Returns a shared Exa MCP client, connecting lazily on first use. */
-export function getExaMcpClient(apiKey?: string): Promise<Client> {
-  if (!exaMcpClientPromise) {
-    const clientPromise = (async () => {
-      const transport = new StreamableHTTPClientTransport(buildExaMcpUrl(apiKey));
-      const client = new Client(
-        { name: 'pi-llm-surface', version: '0.1.0' },
-        { capabilities: {} },
-      );
-      await client.connect(transport as Parameters<Client['connect']>[0]);
-      return client;
-    })();
+/** Returns a cache key for the resolved Exa API key (`''` when anonymous). */
+function apiKeyCacheKey(apiKey?: string): string {
+  return apiKey ?? '';
+}
 
-    exaMcpClientPromise = clientPromise.catch((error: unknown) => {
-      if (clientPromise === exaMcpClientPromise) {
-        exaMcpClientPromise = undefined;
-      }
-      throw error;
-    });
+/** Returns a shared Exa MCP client keyed by API key, connecting lazily on first use. */
+export function getExaMcpClient(apiKey?: string): Promise<Client> {
+  const cacheKey = apiKeyCacheKey(apiKey);
+  const existing = exaMcpClients.get(cacheKey);
+  if (existing) {
+    return existing;
   }
 
-  return exaMcpClientPromise;
+  const clientPromise = (async () => {
+    const transport = new StreamableHTTPClientTransport(buildExaMcpUrl(apiKey));
+    const client = new Client(
+      { name: 'pi-llm-surface', version: '0.1.0' },
+      { capabilities: {} },
+    );
+    await client.connect(transport as Parameters<Client['connect']>[0]);
+    return client;
+  })();
+
+  const trackedPromise = clientPromise.catch((error: unknown) => {
+    if (exaMcpClients.get(cacheKey) === trackedPromise) {
+      exaMcpClients.delete(cacheKey);
+    }
+    throw error;
+  });
+
+  exaMcpClients.set(cacheKey, trackedPromise);
+  return trackedPromise;
 }
 
 export type ExaWebSearchOptions = {
@@ -86,16 +96,15 @@ export async function callExaWebSearch(
   return truncateUtf8(text, options.maxResponseBytes ?? DEFAULT_MAX_RESPONSE_BYTES);
 }
 
-/** Closes the shared Exa MCP client if one is open. */
+/** Closes all cached Exa MCP clients. */
 export async function closeExaMcp(): Promise<void> {
-  if (!exaMcpClientPromise) {
-    return;
-  }
+  const clientPromises = [...exaMcpClients.values()];
+  exaMcpClients.clear();
 
-  const clientPromise = exaMcpClientPromise;
-  exaMcpClientPromise = undefined;
-  const client = await clientPromise.catch(() => undefined);
-  await client?.close();
+  for (const clientPromise of clientPromises) {
+    const client = await clientPromise.catch(() => undefined);
+    await client?.close();
+  }
 }
 
 /** Error thrown when Exa MCP search fails. */
@@ -132,4 +141,9 @@ function isRateLimitMessage(message: string): boolean {
 export function resolveExaApiKey(): string | undefined {
   const key = process.env.EXA_API_KEY?.trim();
   return key ? key : undefined;
+}
+
+/** @internal Exposes the client cache for tests. */
+export function __getExaMcpClientCacheForTests(): Map<string, Promise<Client>> {
+  return exaMcpClients;
 }

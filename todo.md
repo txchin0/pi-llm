@@ -48,3 +48,6 @@
 
 - [ ] Scope everything per user
 
+
+Add integration tests with stub LLM backend
+

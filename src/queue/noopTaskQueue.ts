@@ -1,4 +1,4 @@
-import type { TaskQueue } from './sqliteTaskQueue.js';
+import type { TaskQueue } from './taskQueue.js';
 
 /** Returns empty lists; used when buildServer() runs without a real queue in tests. */
 export const noopTaskQueue: TaskQueue = {
@@ -8,10 +8,6 @@ export const noopTaskQueue: TaskQueue = {
 
   async getById() {
     return null;
-  },
-
-  async listPending() {
-    return [];
   },
 
   async listByUser() {

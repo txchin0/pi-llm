@@ -7,7 +7,7 @@ import type {
 import { validateSurfaceLlmEndpoint } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import type { AppLogger } from '../logging/types.js';
-import type { TaskQueue } from '../queue/sqliteTaskQueue.js';
+import type { TaskQueue } from '../queue/taskQueue.js';
 import {
   AgentSession,
   createAgentSession,
@@ -55,7 +55,12 @@ function buildSurfaceExtensionDependencies(
   return deps;
 }
 
-/** Creates a read-only Pi surface agent session for one conversation thread. */
+/**
+ * Creates a read-only Pi surface agent session for one conversation thread.
+ *
+ * Per-session LLM endpoint validation is intentional: bootstrap warns at startup,
+ * but this fails fast if the endpoint becomes unreachable before a new session opens.
+ */
 export async function createSurfaceSession(
   options: CreateSurfaceSessionOptions,
 ): Promise<AgentSession> {

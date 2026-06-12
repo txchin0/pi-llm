@@ -1,33 +1,12 @@
 import { DateTime } from 'luxon';
 
+import { parseBoolean, parsePositiveInt } from './parseEnv.js';
+
 const DEFAULT_TIMEZONE = 'Australia/Sydney';
-
-/** Reads `PORT` from the environment, defaulting to 3000 when unset. */
-function parsePort(value: string | undefined): number {
-  if (value === undefined) {
-    return 3000;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`Invalid PORT value: ${value}`);
-  }
-
-  return parsed;
-}
 
 const NODE_ENV_VALUES = ['development', 'production', 'test'] as const;
 
 export type NodeEnv = (typeof NODE_ENV_VALUES)[number];
-
-/** Normalizes `NODE_ENV`, defaulting to `development` when unset or unrecognized. */
-function parseNodeEnv(value: string | undefined): NodeEnv {
-  if (value === 'production' || value === 'test') {
-    return value;
-  }
-
-  return 'development';
-}
 
 const LOG_LEVEL_VALUES = [
   'fatal',
@@ -40,6 +19,15 @@ const LOG_LEVEL_VALUES = [
 ] as const;
 
 export type LogLevel = (typeof LOG_LEVEL_VALUES)[number];
+
+/** Normalizes `NODE_ENV`, defaulting to `development` when unset or unrecognized. */
+function parseNodeEnv(value: string | undefined): NodeEnv {
+  if (value === 'production' || value === 'test') {
+    return value;
+  }
+
+  return 'development';
+}
 
 /** Parses `LOG_LEVEL` or returns the default for the current environment. */
 function parseLogLevel(
@@ -85,31 +73,7 @@ function parseLogPretty(
     return nodeEnv === 'development';
   }
 
-  if (value === 'true' || value === '1') {
-    return true;
-  }
-
-  if (value === 'false' || value === '0') {
-    return false;
-  }
-
-  throw new Error(`Invalid LOG_PRETTY value: ${value}. Expected true or false.`);
-}
-
-/** Parses `TASK_CONTEXT_TURN_LIMIT`, defaulting to 3 when unset. */
-function parseTaskContextTurnLimit(value: string | undefined): number {
-  if (value === undefined || value.trim() === '') {
-    return 3;
-  }
-
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(
-      `Invalid TASK_CONTEXT_TURN_LIMIT value: ${value}. Expected a positive integer.`,
-    );
-  }
-
-  return parsed;
+  return parseBoolean(value, nodeEnv === 'development');
 }
 
 /** Parses `TIMEZONE` (IANA), defaulting to Australia/Sydney when unset. */
@@ -129,14 +93,21 @@ function parseTimezone(value: string | undefined): string {
 const nodeEnv = parseNodeEnv(process.env.NODE_ENV);
 
 export const env = {
-  PORT: parsePort(process.env.PORT),
+  PORT: parsePositiveInt(process.env.PORT, 'PORT', 3000),
   NODE_ENV: nodeEnv,
   DATA_ROOT: parseDataRoot(process.env.DATA_ROOT),
   LOG_LEVEL: parseLogLevel(process.env.LOG_LEVEL, nodeEnv),
   LOG_PRETTY: parseLogPretty(process.env.LOG_PRETTY, nodeEnv),
   TIMEZONE: parseTimezone(process.env.TIMEZONE),
-  TASK_CONTEXT_TURN_LIMIT: parseTaskContextTurnLimit(
+  TASK_CONTEXT_TURN_LIMIT: parsePositiveInt(
     process.env.TASK_CONTEXT_TURN_LIMIT,
+    'TASK_CONTEXT_TURN_LIMIT',
+    3,
+  ),
+  SURFACE_SESSION_CACHE_LIMIT: parsePositiveInt(
+    process.env.SURFACE_SESSION_CACHE_LIMIT,
+    'SURFACE_SESSION_CACHE_LIMIT',
+    50,
   ),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',

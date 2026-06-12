@@ -60,15 +60,19 @@ flowchart TB
 
     taskSchema["schema.ts · drizzle/"]
 
-    taskQueue["sqliteTaskQueue.ts<br/>enqueue · listPending"]
+    taskQueuePort["taskQueue.ts<br/>port"]
+
+    taskQueue["sqliteTaskQueue.ts<br/>enqueue · listByUser"]
+
+    taskQueuePort --> taskQueue
 
     extractTurns["extractRecentTurns.ts<br/>Pi session → context.turns"]
 
     taskSchema --> taskQueue
 
-    taskTypes --> taskQueue
+    taskTypes --> taskQueuePort
 
-    extractTurns --> taskQueue
+    extractTurns --> taskQueuePort
 
   end
 

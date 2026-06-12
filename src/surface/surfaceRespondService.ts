@@ -42,7 +42,6 @@ export function createSurfaceRespondService(
       const mapperContext = {
         requestId: context.requestId,
         sessionId: context.sessionId,
-        showThinking: request.show_thinking === true,
         completedAt: now,
       };
 

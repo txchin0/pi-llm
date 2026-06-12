@@ -11,7 +11,7 @@ import type {
 import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import type { AppLogger } from '../logging/types.js';
-import type { TaskQueue } from '../queue/sqliteTaskQueue.js';
+import type { TaskQueue } from '../queue/taskQueue.js';
 import { createSurfaceSession } from './createSurfaceSession.js';
 
 export type SurfaceSessionRegistryDependencies = {
@@ -22,6 +22,7 @@ export type SurfaceSessionRegistryDependencies = {
   surfaceAgentConfig: SurfaceAgentConfig;
   taskQueue: TaskQueue;
   contextTurnLimit: number;
+  maxSessions: number;
   log?: AppLogger;
 };
 
@@ -35,6 +36,7 @@ export class SurfaceSessionRegistry {
   private readonly surfaceAgentConfig: SurfaceAgentConfig;
   private readonly taskQueue: TaskQueue;
   private readonly contextTurnLimit: number;
+  private readonly maxSessions: number;
   private readonly log: AppLogger | undefined;
 
   /** Creates a registry with shared model and auth dependencies. */
@@ -46,6 +48,7 @@ export class SurfaceSessionRegistry {
     this.surfaceAgentConfig = dependencies.surfaceAgentConfig;
     this.taskQueue = dependencies.taskQueue;
     this.contextTurnLimit = dependencies.contextTurnLimit;
+    this.maxSessions = dependencies.maxSessions;
     this.log = dependencies.log;
   }
 
@@ -53,8 +56,11 @@ export class SurfaceSessionRegistry {
   async getOrCreate(sessionId: SessionId, userId: string): Promise<AgentSession> {
     const existing = this.sessions.get(sessionId);
     if (existing) {
+      this.touchSession(sessionId, existing);
       return existing;
     }
+
+    this.evictIfNeeded();
 
     const sessionOptions = {
       userId,
@@ -74,5 +80,39 @@ export class SurfaceSessionRegistry {
 
     this.sessions.set(sessionId, session);
     return session;
+  }
+
+  /** Marks a session as recently used for LRU eviction. */
+  private touchSession(sessionId: SessionId, session: AgentSession): void {
+    this.sessions.delete(sessionId);
+    this.sessions.set(sessionId, session);
+  }
+
+  /** Evicts the least-recently-used idle session when at capacity. */
+  private evictIfNeeded(): void {
+    while (this.sessions.size >= this.maxSessions) {
+      let evicted = false;
+
+      for (const [sessionId, session] of this.sessions) {
+        if (session.isStreaming) {
+          continue;
+        }
+
+        this.sessions.delete(sessionId);
+        this.log?.info(
+          {
+            event: 'surface.session.evicted',
+            session_id: sessionId,
+          },
+          'surface session evicted',
+        );
+        evicted = true;
+        break;
+      }
+
+      if (!evicted) {
+        break;
+      }
+    }
   }
 }

@@ -1,10 +1,34 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  __getExaMcpClientCacheForTests,
   buildExaMcpUrl,
+  closeExaMcp,
   ExaMcpError,
+  getExaMcpClient,
   truncateUtf8,
 } from '../../src/surface/exaMcpClient.js';
+
+const connectMock = vi.fn(async () => undefined);
+
+vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+  Client: vi.fn().mockImplementation(function MockClient(this: {
+    connect: typeof connectMock;
+    close: () => Promise<void>;
+  }) {
+    this.connect = connectMock;
+    this.close = vi.fn(async () => undefined);
+  }),
+}));
+
+vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+  StreamableHTTPClientTransport: vi.fn().mockImplementation(function MockTransport(
+    this: { url: URL },
+    url: URL,
+  ) {
+    this.url = url;
+  }),
+}));
 
 describe('buildExaMcpUrl', () => {
   it('scopes the MCP server to web search only', () => {
@@ -38,5 +62,25 @@ describe('ExaMcpError', () => {
     const error = new ExaMcpError('HTTP 429', { rateLimited: true });
     expect(error.rateLimited).toBe(true);
     expect(error.message).toBe('HTTP 429');
+  });
+});
+
+describe('getExaMcpClient', () => {
+  afterEach(async () => {
+    connectMock.mockClear();
+    await closeExaMcp();
+  });
+
+  it('caches clients separately by API key', async () => {
+    const anonymous = await getExaMcpClient();
+    const withKey = await getExaMcpClient('test-key');
+
+    expect(anonymous).not.toBe(withKey);
+    expect(__getExaMcpClientCacheForTests().size).toBe(2);
+    expect(connectMock).toHaveBeenCalledTimes(2);
+
+    await getExaMcpClient();
+    await getExaMcpClient('test-key');
+    expect(connectMock).toHaveBeenCalledTimes(2);
   });
 });

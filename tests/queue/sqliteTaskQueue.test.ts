@@ -59,7 +59,7 @@ describe('createSqliteTaskQueue', () => {
       context: { turns: [] },
     });
 
-    const pending = await queue.listPending('web-user');
+    const pending = await queue.listByUser('web-user', { statuses: ['pending'] });
     expect(pending.map((task) => task.id)).toEqual([first.id, second.id]);
   });
 
@@ -146,7 +146,7 @@ describe('createSqliteTaskQueue', () => {
       context: { turns: [] },
     });
 
-    const pending = await queue.listPending('user-a');
+    const pending = await queue.listByUser('user-a', { statuses: ['pending'] });
     expect(pending).toHaveLength(1);
     expect(pending[0]?.id).toBe(userTask.id);
   });

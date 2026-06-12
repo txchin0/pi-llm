@@ -50,7 +50,7 @@ export function registerTasksRoute(
       if (requestError === undefined) {
         log.info(
           {
-            event: 'tasks.list.completed',
+            event: 'tasks.request.completed',
             duration_ms: Date.now() - startedAtMs,
           },
           'tasks list request completed',

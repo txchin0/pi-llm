@@ -2,7 +2,7 @@ import type { ExtensionContext, SessionEntry } from '@earendil-works/pi-coding-a
 import { describe, expect, it, vi } from 'vitest';
 
 import type { SessionHistoryReader } from '../../src/queue/extractRecentTurns.js';
-import type { TaskQueue } from '../../src/queue/sqliteTaskQueue.js';
+import type { TaskQueue } from '../../src/queue/taskQueue.js';
 import { executeScheduleTask } from '../../src/surface/extensions/scheduleTaskTool.js';
 
 function createSessionManager(entries: SessionEntry[] = []): SessionHistoryReader {

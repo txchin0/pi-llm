@@ -7,23 +7,29 @@ import {
   createRootLogger,
   type AppLogger,
 } from '../logging/index.js';
-import type { TaskQueue } from '../queue/sqliteTaskQueue.js';
+import { noopTaskQueue } from '../queue/noopTaskQueue.js';
+import type { TaskQueue } from '../queue/taskQueue.js';
 import {
   RespondController,
   type RespondControllerDependencies,
 } from '../respond/respondController.js';
 import { ListTasksController } from '../tasks/listTasksController.js';
+import { createTaskListService } from '../tasks/taskListService.js';
 import { registerRespondRoute } from './routes/respond.js';
 import { registerTasksRoute } from './routes/tasks.js';
 
 export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
-  taskQueue: TaskQueue;
+  taskQueue?: TaskQueue;
 };
 
 /** Creates a Fastify instance with respond and tasks routes. */
-export function buildServer(options: BuildServerOptions) {
-  const { logger = createRootLogger(), taskQueue, ...controllerOptions } = options;
+export function buildServer(options: BuildServerOptions = {}) {
+  const {
+    logger = createRootLogger(),
+    taskQueue = noopTaskQueue,
+    ...controllerOptions
+  } = options;
   const requestIdFactory =
     controllerOptions.requestIdFactory ??
     (() => `req_${randomBytes(8).toString('hex')}`);
@@ -38,7 +44,7 @@ export function buildServer(options: BuildServerOptions) {
   app.setErrorHandler((error, request, reply) => {
     createChildLogger(logger, { component: 'server' }).error(
       {
-        event: 'respond.request.failed',
+        event: 'server.request.failed',
         request_id: request.id,
         err: error,
       },
@@ -56,7 +62,11 @@ export function buildServer(options: BuildServerOptions) {
   });
   registerRespondRoute(app, { controller, logger });
 
-  const listTasksController = new ListTasksController({ taskQueue, logger });
+  const taskListService = createTaskListService({ taskQueue });
+  const listTasksController = new ListTasksController({
+    service: taskListService,
+    logger,
+  });
   registerTasksRoute(app, { controller: listTasksController, logger });
 
   return app;

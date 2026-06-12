@@ -223,9 +223,12 @@ The surface agent can answer questions about pending or recently completed tasks
 | Piece | Location |
 |-------|----------|
 | Types and validation | `src/queue/taskTypes.ts` |
+| Queue port | `src/queue/taskQueue.ts` |
 | Drizzle schema + migration | `src/queue/schema.ts`, `drizzle/` |
 | SQLite repository | `src/queue/sqliteTaskQueue.ts` |
 | Conversation excerpt builder | `src/queue/extractRecentTurns.ts` |
+| Task list service | `src/tasks/taskListService.ts` |
+| Tasks HTTP route | `src/server/routes/tasks.ts`, `src/tasks/listTasksController.ts` |
 | Surface tool | `src/surface/extensions/scheduleTaskTool.ts`, registered in `surfaceExtension.ts` |
 | Bootstrap wiring | `src/index.ts` creates queue; `SurfaceSessionRegistry` passes queue into session factory |
 
@@ -414,8 +417,10 @@ When a user sends a new message, the server may inject a brief system note listi
 
 ### 12.2 Tasks (Optional MVP)
 
-- List tasks with status filter.
+- List tasks with status filter (`GET /v1/tasks`).
 - Get single task by id.
+
+In the single-user MVP, `user_id` is passed as a query parameter and is trusted (no auth gate). Multi-user deployments must authenticate the caller and derive `user_id` server-side.
 
 ### 12.3 Memory Index (Optional MVP)
 
@@ -528,7 +533,9 @@ Structured logs for chat requests, tool invocations, task state transitions, and
 
 ### 17.3 Configuration
 
-Environment-driven settings: idle timeout, retry limits, model ids, data root path, provider selection for calendar and search, `TASK_CONTEXT_TURN_LIMIT` (conversation turns snapshotted into queued tasks, default 3).
+Environment-driven settings: idle timeout, retry limits, model ids, data root path, provider selection for calendar and search, `TASK_CONTEXT_TURN_LIMIT` (conversation turns snapshotted into queued tasks, default 3), `SURFACE_SESSION_CACHE_LIMIT` (max cached surface sessions before LRU eviction of idle sessions, default 50).
+
+**Surface LLM health checks (intentional duplication):** bootstrap logs a warning via `warnSurfaceLlmEndpoint` when the configured model endpoint is unreachable; each new surface session also calls `validateSurfaceLlmEndpoint` and fails fast if the endpoint is down. Startup warning aids ops visibility; per-session validation catches endpoint drift between server start and first use of a new `session_id`.
 
 ---
 
