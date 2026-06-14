@@ -1,17 +1,15 @@
-import type { AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent';
+import type { AuthStorage, ModelRegistry, AgentSession } from '@earendil-works/pi-coding-agent';
+import {
+  createAgentSession,
+  SessionManager,
+  SettingsManager,
+} from '@earendil-works/pi-coding-agent';
 
 import type {
   WorkerAgentConfig,
   WorkerModel,
 } from '../config/workerAgent.js';
 import type { AppLogger } from '../logging/types.js';
-import {
-  AgentSession,
-  createAgentSession,
-  SessionManager,
-  SettingsManager,
-} from '@earendil-works/pi-coding-agent';
-
 import { buildWorkerSystemPrompt } from './buildWorkerSystemPrompt.js';
 import { createWorkerExtension } from './extensions/workerExtension.js';
 import { createSurfaceResourceLoader } from '../surface/createSurfaceResourceLoader.js';

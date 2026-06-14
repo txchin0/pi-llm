@@ -22,8 +22,11 @@ export type LogLevel = (typeof LOG_LEVEL_VALUES)[number];
 
 /** Normalizes `NODE_ENV`, defaulting to `development` when unset or unrecognized. */
 function parseNodeEnv(value: string | undefined): NodeEnv {
-  if (value === 'production' || value === 'test') {
-    return value;
+  if (
+    value !== undefined &&
+    (NODE_ENV_VALUES as readonly string[]).includes(value)
+  ) {
+    return value as NodeEnv;
   }
 
   return 'development';

@@ -1,4 +1,9 @@
-import type { AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent';
+import type { AuthStorage, ModelRegistry, AgentSession } from '@earendil-works/pi-coding-agent';
+import {
+  createAgentSession,
+  SessionManager,
+  SettingsManager,
+} from '@earendil-works/pi-coding-agent';
 
 import type {
   SurfaceAgentConfig,
@@ -8,12 +13,6 @@ import { validateSurfaceLlmEndpoint } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import type { AppLogger } from '../logging/types.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
-import {
-  AgentSession,
-  createAgentSession,
-  SessionManager,
-  SettingsManager,
-} from '@earendil-works/pi-coding-agent';
 
 import { buildSurfaceSystemPrompt } from './buildSurfaceSystemPrompt.js';
 import { createSurfaceResourceLoader } from './createSurfaceResourceLoader.js';
