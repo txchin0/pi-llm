@@ -3,13 +3,13 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import Database from 'better-sqlite3';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { AppLogger } from '../logging/types.js';
 import { tasks } from './schema.js';
-import type { TaskQueue } from './taskQueue.js';
+import type { WorkerTaskQueue } from './taskQueue.js';
 import {
   EnqueueTaskInputSchema,
   TaskContextSchema,
@@ -20,7 +20,7 @@ import {
   type TaskStatus,
 } from './taskTypes.js';
 
-export type SqliteTaskQueue = TaskQueue & {
+export type SqliteTaskQueue = WorkerTaskQueue & {
   close(): void;
 };
 
@@ -61,6 +61,13 @@ function mapRowToTaskListRecord(row: TaskListRow): TaskListRecord {
   });
 }
 
+/** Throws when a running-task transition did not update exactly one row. */
+function assertRunningTaskUpdated(taskId: string, changes: number): void {
+  if (changes !== 1) {
+    throw new Error(`task ${taskId} is not running or does not exist`);
+  }
+}
+
 /** Maps a Drizzle row to a validated task record. */
 function mapRowToTaskRecord(row: typeof tasks.$inferSelect): TaskRecord {
   return TaskRecordSchema.parse({
@@ -88,6 +95,35 @@ export async function createSqliteTaskQueue(
   const db = drizzle(sqlite);
 
   migrate(db, { migrationsFolder: options.migrationsFolder });
+
+  /** Selects the oldest pending task and flips it to running inside one transaction. */
+  const claimNextPendingSync = sqlite.transaction((): TaskRecord | null => {
+    const rows = db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.status, 'pending'))
+      .orderBy(asc(tasks.updatedAt), asc(tasks.id))
+      .limit(1)
+      .all();
+
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    const changes = db
+      .update(tasks)
+      .set({ status: 'running', updatedAt: now })
+      .where(and(eq(tasks.id, row.id), eq(tasks.status, 'pending')))
+      .run().changes;
+
+    if (changes !== 1) {
+      return null;
+    }
+
+    return mapRowToTaskRecord({ ...row, status: 'running', updatedAt: now });
+  });
 
   const queue: SqliteTaskQueue = {
     close() {
@@ -174,6 +210,96 @@ export async function createSqliteTaskQueue(
         .limit(limit);
 
       return rows.map((row) => mapRowToTaskListRecord(row));
+    },
+
+    async claimNextPending() {
+      const record = claimNextPendingSync();
+      if (!record) {
+        return null;
+      }
+
+      options.log?.info(
+        {
+          event: 'task.claimed',
+          task_id: record.id,
+          user_id: record.userId,
+          session_id: record.sessionId ?? undefined,
+        },
+        'task claimed',
+      );
+
+      return record;
+    },
+
+    async markCompleted(taskId, result) {
+      const now = new Date().toISOString();
+      const changes = db
+        .update(tasks)
+        .set({ status: 'completed', result, updatedAt: now })
+        .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+        .run().changes;
+
+      assertRunningTaskUpdated(taskId, changes);
+
+      options.log?.info(
+        { event: 'task.completed', task_id: taskId },
+        'task completed',
+      );
+    },
+
+    async markFailed(taskId, errorMessage) {
+      const now = new Date().toISOString();
+      const changes = db
+        .update(tasks)
+        .set({ status: 'failed', errorMessage, updatedAt: now })
+        .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+        .run().changes;
+
+      assertRunningTaskUpdated(taskId, changes);
+
+      options.log?.info(
+        { event: 'task.failed', task_id: taskId },
+        'task failed',
+      );
+    },
+
+    async requeue(taskId, errorMessage) {
+      const now = new Date().toISOString();
+      const changes = db
+        .update(tasks)
+        .set({
+          status: 'pending',
+          retryCount: sql`${tasks.retryCount} + 1`,
+          errorMessage,
+          updatedAt: now,
+        })
+        .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+        .run().changes;
+
+      assertRunningTaskUpdated(taskId, changes);
+
+      options.log?.info(
+        { event: 'task.requeued', task_id: taskId },
+        'task requeued',
+      );
+    },
+
+    async requeueStuckRunning() {
+      const now = new Date().toISOString();
+      const changes = db
+        .update(tasks)
+        .set({ status: 'pending', updatedAt: now })
+        .where(eq(tasks.status, 'running'))
+        .run().changes;
+
+      if (changes > 0) {
+        options.log?.info(
+          { event: 'task.stuck_requeued', count: changes },
+          'stuck running tasks requeued',
+        );
+      }
+
+      return changes;
     },
   };
 

@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
 import { runAgentPrompt } from '../../src/agent/runAgentPrompt.js';
-import type { RespondSseEvent } from '../../src/contracts/respond.js';
 
 function createMockSession(
   handlers: {
     subscribe?: (cb: (event: AgentSessionEvent) => void) => () => void;
-    prompt?: (message: string) => Promise<void>;
+    prompt?: (message: string, options?: { signal?: AbortSignal }) => Promise<void>;
+    abort?: () => Promise<void>;
     isStreaming?: boolean;
   } = {},
 ): AgentSession {
@@ -16,23 +16,24 @@ function createMockSession(
     isStreaming: handlers.isStreaming ?? false,
     subscribe: handlers.subscribe ?? (() => () => {}),
     prompt: handlers.prompt ?? (async () => {}),
+    abort: handlers.abort ?? (async () => {}),
   } as AgentSession;
 }
 
 async function collectEvents(
   session: AgentSession,
   message: string,
-  mapEvent: (event: AgentSessionEvent) => RespondSseEvent[],
-): Promise<RespondSseEvent[]> {
-  const events: RespondSseEvent[] = [];
-  for await (const event of runAgentPrompt(session, message, { mapEvent })) {
+  options?: { signal?: AbortSignal },
+): Promise<AgentSessionEvent[]> {
+  const events: AgentSessionEvent[] = [];
+  for await (const event of runAgentPrompt(session, message, options)) {
     events.push(event);
   }
   return events;
 }
 
 describe('runAgentPrompt', () => {
-  it('yields mapped events in subscribe order and unsubscribes on completion', async () => {
+  it('yields raw events in subscribe order and unsubscribes on completion', async () => {
     let unsubscribed = false;
     const session = createMockSession({
       subscribe(cb) {
@@ -44,14 +45,9 @@ describe('runAgentPrompt', () => {
       },
     });
 
-    const events = await collectEvents(session, 'hello', (event) => [
-      { type: 'delta', request_id: 'req_1', text: event.type },
-    ]);
+    const events = await collectEvents(session, 'hello');
 
-    expect(events).toEqual([
-      { type: 'delta', request_id: 'req_1', text: 'agent_start' },
-      { type: 'delta', request_id: 'req_1', text: 'agent_end' },
-    ]);
+    expect(events.map((event) => event.type)).toEqual(['agent_start', 'agent_end']);
     expect(unsubscribed).toBe(true);
   });
 
@@ -59,7 +55,7 @@ describe('runAgentPrompt', () => {
     const prompt = vi.fn(async () => {});
     const session = createMockSession({ prompt });
 
-    await collectEvents(session, 'test message', () => []);
+    await collectEvents(session, 'test message');
 
     expect(prompt).toHaveBeenCalledWith('test message');
   });
@@ -75,11 +71,28 @@ describe('runAgentPrompt', () => {
       },
     });
 
+    await expect(collectEvents(session, 'hello')).rejects.toThrow('prompt failed');
+  });
+
+  it('aborts the session when the signal fires', async () => {
+    const abort = vi.fn(async () => {});
+    const controller = new AbortController();
+    const session = createMockSession({
+      subscribe() {
+        return () => {};
+      },
+      prompt: () =>
+        new Promise<void>(() => {
+          controller.abort();
+        }),
+      abort,
+    });
+
     await expect(
-      collectEvents(session, 'hello', () => [
-        { type: 'delta', request_id: 'req_1', text: 'x' },
-      ]),
-    ).rejects.toThrow('prompt failed');
+      collectEvents(session, 'hello', { signal: controller.signal }),
+    ).rejects.toThrow();
+
+    expect(abort).toHaveBeenCalled();
   });
 
   it('delivers events without setImmediate polling', async () => {
@@ -92,9 +105,7 @@ describe('runAgentPrompt', () => {
       },
     });
 
-    await collectEvents(session, 'hello', () => [
-      { type: 'delta', request_id: 'req_1', text: 'fast' },
-    ]);
+    await collectEvents(session, 'hello');
 
     expect(setImmediateSpy).not.toHaveBeenCalled();
     setImmediateSpy.mockRestore();

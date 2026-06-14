@@ -1,26 +1,43 @@
 import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-import type { RespondSseEvent } from '../contracts/respond.js';
-
-export type AgentPromptMapper = (event: AgentSessionEvent) => RespondSseEvent[];
-
 export type RunAgentPromptOptions = {
-  mapEvent: AgentPromptMapper;
+  signal?: AbortSignal;
 };
 
-/** Subscribes to Pi session events, runs prompt(), and yields mapped SSE events until completion. */
+/** Throws when the abort signal has fired. */
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) {
+    return;
+  }
+
+  throw signal.reason instanceof Error
+    ? signal.reason
+    : new Error('Agent prompt aborted');
+}
+
+/**
+ * Subscribes to Pi session events, runs prompt(), and yields raw events until completion.
+ * Callers own event interpretation (SSE mapping, worker summarization, error handling).
+ * Optionally aborts the session when `signal` fires.
+ */
 export async function* runAgentPrompt(
   session: AgentSession,
   message: string,
-  options: RunAgentPromptOptions,
-): AsyncGenerator<RespondSseEvent> {
-  const queue: RespondSseEvent[] = [];
+  options: RunAgentPromptOptions = {},
+): AsyncGenerator<AgentSessionEvent> {
+  const { signal } = options;
+  const queue: AgentSessionEvent[] = [];
   let done = false;
   let promptError: unknown;
   let resolveNext: (() => void) | null = null;
 
+  const abortHandler = () => {
+    void session.abort();
+  };
+  signal?.addEventListener('abort', abortHandler);
+
   const unsubscribe = session.subscribe((event) => {
-    queue.push(...options.mapEvent(event));
+    queue.push(event);
     resolveNext?.();
     resolveNext = null;
   });
@@ -38,8 +55,10 @@ export async function* runAgentPrompt(
 
   try {
     while (!done || queue.length > 0) {
+      throwIfAborted(signal);
+
       if (queue.length > 0) {
-        yield queue.shift() as RespondSseEvent;
+        yield queue.shift() as AgentSessionEvent;
         continue;
       }
 
@@ -53,11 +72,13 @@ export async function* runAgentPrompt(
     }
 
     await promptPromise;
+    throwIfAborted(signal);
 
     if (promptError !== undefined) {
       throw promptError;
     }
   } finally {
+    signal?.removeEventListener('abort', abortHandler);
     unsubscribe();
   }
 }

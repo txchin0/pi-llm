@@ -46,14 +46,16 @@ export function createSurfaceRespondService(
       };
 
       try {
-        yield* runAgentPrompt(session, enrichUserMessage(request.message, now), {
-          mapEvent: (event) =>
-            mapPiEventForRequest(event, {
-              request,
-              context: mapperContext,
-              state: mapperState,
-            }),
-        });
+        for await (const event of runAgentPrompt(
+          session,
+          enrichUserMessage(request.message, now),
+        )) {
+          yield* mapPiEventForRequest(event, {
+            request,
+            context: mapperContext,
+            state: mapperState,
+          });
+        }
       } catch (error) {
         log?.error(
           {

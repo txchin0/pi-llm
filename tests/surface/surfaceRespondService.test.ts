@@ -8,7 +8,10 @@ import type { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionReg
 
 vi.mock('../../src/agent/runAgentPrompt.js', () => ({
   runAgentPrompt: vi.fn(async function* () {
-    yield { type: 'delta', text: 'from-runner' };
+    yield {
+      type: 'message_update',
+      assistantMessageEvent: { type: 'text_delta', delta: 'from-runner' },
+    } as import('@earendil-works/pi-coding-agent').AgentSessionEvent;
   }),
 }));
 
@@ -75,14 +78,15 @@ describe('createSurfaceRespondService', () => {
     expect(runAgentPrompt).toHaveBeenCalledWith(
       expect.objectContaining({ isStreaming: false }),
       '[Current time: 2026-06-09T12:00:00.000Z]\n\nhello',
-      expect.objectContaining({ mapEvent: expect.any(Function) }),
     );
   });
 
   it('maps prompt failures to agent_error', async () => {
     vi.mocked(runAgentPrompt).mockImplementation(async function* () {
       throw new Error('prompt failed');
-      yield { type: 'delta', text: 'unreachable' };
+      yield {
+        type: 'agent_start',
+      } as import('@earendil-works/pi-coding-agent').AgentSessionEvent;
     });
 
     const registry = {

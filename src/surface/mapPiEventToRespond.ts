@@ -1,5 +1,6 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
+import { extractAssistantOutcome, findLastAssistantMessage } from '../agent/extractAssistantOutcome.js';
 import type {
   ProviderFinishReason,
   ProviderUsage,
@@ -77,7 +78,7 @@ export function mapUsage(usage: AssistantUsageSlice): ProviderUsage {
   };
 }
 
-/** Returns true when a Pi message has assistant completion fields. */
+/** Returns true when a Pi message has assistant fields needed for SSE usage mapping. */
 function isAssistantMessageSlice(
   message: { role: string },
 ): message is AssistantMessageSlice {
@@ -86,22 +87,6 @@ function isAssistantMessageSlice(
     'usage' in message &&
     'stopReason' in message
   );
-}
-
-/** Returns the last assistant message from an agent_end payload. */
-function findLastAssistantMessage(
-  messages: readonly { role: string }[],
-): AssistantMessageSlice | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message === undefined || !isAssistantMessageSlice(message)) {
-      continue;
-    }
-
-    return message;
-  }
-
-  return undefined;
 }
 
 /** Maps one Pi session event to zero or more SSE respond events. */
@@ -179,11 +164,15 @@ export function mapPiEventToRespond(
       ];
     }
     case 'agent_end': {
-      if (event.willRetry) {
+      const outcome = extractAssistantOutcome(event);
+      if (outcome.kind === 'retry') {
         return [];
       }
 
-      const assistantMessage = findLastAssistantMessage(event.messages);
+      const assistantMessage = findLastAssistantMessage(
+        event.messages,
+        isAssistantMessageSlice,
+      );
       const events: RespondSseEvent[] = [];
 
       if (assistantMessage) {
@@ -193,17 +182,12 @@ export function mapPiEventToRespond(
           usage: mapUsage(assistantMessage.usage),
         });
 
-        if (
-          assistantMessage.stopReason === 'error' ||
-          assistantMessage.stopReason === 'aborted'
-        ) {
+        if (outcome.kind === 'error') {
           events.push({
             type: 'error',
             request_id: context.requestId,
             code: 'llm_error',
-            message:
-              assistantMessage.errorMessage ??
-              'Surface LLM request failed before a response was generated.',
+            message: outcome.message,
           });
         }
       }

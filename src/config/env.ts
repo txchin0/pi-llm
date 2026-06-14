@@ -109,6 +109,25 @@ export const env = {
     'SURFACE_SESSION_CACHE_LIMIT',
     50,
   ),
+  WORKER_ENABLED: parseBoolean(
+    process.env.WORKER_ENABLED,
+    nodeEnv === 'production',
+  ),
+  WORKER_POLL_INTERVAL_MS: parsePositiveInt(
+    process.env.WORKER_POLL_INTERVAL_MS,
+    'WORKER_POLL_INTERVAL_MS',
+    5000,
+  ),
+  WORKER_MAX_RETRIES: parsePositiveInt(
+    process.env.WORKER_MAX_RETRIES,
+    'WORKER_MAX_RETRIES',
+    2,
+  ),
+  WORKER_TASK_TIMEOUT_MS: parsePositiveInt(
+    process.env.WORKER_TASK_TIMEOUT_MS,
+    'WORKER_TASK_TIMEOUT_MS',
+    120_000,
+  ),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
   isProd: nodeEnv === 'production',

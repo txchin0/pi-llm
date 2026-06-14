@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TaskListRecord } from '../../src/queue/taskTypes.js';
 import { createTaskListService } from '../../src/tasks/taskListService.js';
+import { createMockTaskQueue } from '../helpers/mockTaskQueue.js';
 
 describe('createTaskListService', () => {
   it('lists task summaries from the queue', async () => {
@@ -17,19 +18,13 @@ describe('createTaskListService', () => {
     };
 
     const service = createTaskListService({
-      taskQueue: {
-        async enqueue() {
-          throw new Error('not used');
-        },
-        async getById() {
-          return null;
-        },
+      taskQueue: createMockTaskQueue({
         async listByUser(_userId, options) {
           expect(options.statuses).toEqual(['pending', 'running']);
           expect(options.limit).toBe(10);
           return [record];
         },
-      },
+      }),
     });
 
     const response = await service.listTasks({

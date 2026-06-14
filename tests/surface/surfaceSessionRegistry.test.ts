@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionId } from '../../src/contracts/respond.js';
 import { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
+import { createMockTaskQueue } from '../helpers/mockTaskQueue.js';
 
 const createSurfaceSessionMock = vi.fn();
 
@@ -22,17 +23,7 @@ function createRegistry(maxSessions: number) {
     modelRegistry: {} as never,
     model: {} as never,
     surfaceAgentConfig: {} as never,
-    taskQueue: {
-      async enqueue() {
-        throw new Error('not used');
-      },
-      async getById() {
-        return null;
-      },
-      async listByUser() {
-        return [];
-      },
-    },
+    taskQueue: createMockTaskQueue(),
     contextTurnLimit: 3,
     maxSessions,
   });
