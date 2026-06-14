@@ -19,10 +19,10 @@ describe('createTaskListService', () => {
 
     const service = createTaskListService({
       taskQueue: createMockTaskQueue({
-        async listByUser(_userId, options) {
+        listByUser(_userId, options) {
           expect(options.statuses).toEqual(['pending', 'running']);
           expect(options.limit).toBe(10);
-          return [record];
+          return Promise.resolve([record]);
         },
       }),
     });

@@ -1,5 +1,5 @@
-import { access, cp, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { access, cp, mkdir, readdir } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const DEFAULT_TEMPLATE_DIR = join(
@@ -38,6 +38,55 @@ async function assertTemplateReady(templateDir: string): Promise<void> {
   }
 }
 
+/** Returns true when a concurrent copy error means another caller won the race. */
+function isCopyRaceError(code: string | undefined): boolean {
+  return (
+    code === 'EEXIST' ||
+    code === 'ENOTEMPTY' ||
+    code === 'EBUSY' ||
+    code === 'EPERM' ||
+    code === 'ENOENT'
+  );
+}
+
+/** Copies template files into the workspace, skipping files that already exist. */
+async function seedFromTemplate(
+  workspacePath: string,
+  templateDir: string,
+): Promise<void> {
+  const entries = await readdir(templateDir, {
+    recursive: true,
+    withFileTypes: true,
+  });
+
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const sourcePath = join(entry.parentPath, entry.name);
+    const relativePath = relative(templateDir, sourcePath);
+    const destPath = join(workspacePath, relativePath);
+
+    if (await pathExists(destPath)) {
+      continue;
+    }
+
+    await mkdir(dirname(destPath), { recursive: true });
+
+    try {
+      await cp(sourcePath, destPath, { errorOnExist: true });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (isCopyRaceError(code) && (await pathExists(destPath))) {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
 /**
  * Seeds the user memory workspace from the repo template when uninitialized.
  *
@@ -61,19 +110,5 @@ export async function ensureUserWorkspace(
     return;
   }
 
-  try {
-    await cp(templateDir, workspacePath, {
-      recursive: true,
-      errorOnExist: true,
-    });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST' || code === 'ENOTEMPTY') {
-      if (await pathExists(indexPath)) {
-        return;
-      }
-    }
-
-    throw error;
-  }
+  await seedFromTemplate(workspacePath, templateDir);
 }

@@ -1,17 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AgentSession } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
 import type { RespondSseEvent } from '../../src/contracts/respond.js';
 import { createSurfaceRespondService } from '../../src/surface/surfaceRespondService.js';
 import type { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
 
+const mockAgentEvent = {
+  type: 'message_update',
+  message: {} as never,
+  assistantMessageEvent: {
+    type: 'text_delta',
+    contentIndex: 0,
+    delta: 'from-runner',
+    partial: {} as never,
+  },
+} as AgentSessionEvent;
+
 vi.mock('../../src/agent/runAgentPrompt.js', () => ({
   runAgentPrompt: vi.fn(async function* () {
-    yield {
-      type: 'message_update',
-      assistantMessageEvent: { type: 'text_delta', delta: 'from-runner' },
-    } as import('@earendil-works/pi-coding-agent').AgentSessionEvent;
+    await Promise.resolve();
+    yield mockAgentEvent;
   }),
 }));
 
@@ -34,13 +43,17 @@ async function collectEvents(
   return events;
 }
 
+function createRegistry(session: AgentSession): SurfaceSessionRegistry {
+  return {
+    getOrCreate: vi.fn(() => Promise.resolve(session)),
+  } as unknown as SurfaceSessionRegistry;
+}
+
 describe('createSurfaceRespondService', () => {
   it('returns session_busy when the session is already streaming', async () => {
-    const registry = {
-      getOrCreate: vi.fn(async () => ({ isStreaming: true }) as AgentSession),
-    } as unknown as SurfaceSessionRegistry;
-
-    const service = createSurfaceRespondService({ registry });
+    const service = createSurfaceRespondService({
+      registry: createRegistry({ isStreaming: true } as AgentSession),
+    });
     const events = await collectEvents(service, {
       user_id: 'web-user',
       message: 'hello',
@@ -60,12 +73,8 @@ describe('createSurfaceRespondService', () => {
   it('invokes runAgentPrompt with an enriched message', async () => {
     vi.mocked(runAgentPrompt).mockClear();
 
-    const registry = {
-      getOrCreate: vi.fn(async () => ({ isStreaming: false }) as AgentSession),
-    } as unknown as SurfaceSessionRegistry;
-
     const service = createSurfaceRespondService({
-      registry,
+      registry: createRegistry({ isStreaming: false } as AgentSession),
       now: () => '2026-06-09T12:00:00.000Z',
     });
 
@@ -83,17 +92,14 @@ describe('createSurfaceRespondService', () => {
 
   it('maps prompt failures to agent_error', async () => {
     vi.mocked(runAgentPrompt).mockImplementation(async function* () {
+      await Promise.resolve();
       throw new Error('prompt failed');
-      yield {
-        type: 'agent_start',
-      } as import('@earendil-works/pi-coding-agent').AgentSessionEvent;
+      yield mockAgentEvent;
     });
 
-    const registry = {
-      getOrCreate: vi.fn(async () => ({ isStreaming: false }) as AgentSession),
-    } as unknown as SurfaceSessionRegistry;
-
-    const service = createSurfaceRespondService({ registry });
+    const service = createSurfaceRespondService({
+      registry: createRegistry({ isStreaming: false } as AgentSession),
+    });
     const events = await collectEvents(service, {
       user_id: 'web-user',
       message: 'hello',

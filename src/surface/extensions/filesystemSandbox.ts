@@ -43,7 +43,7 @@ export function registerFilesystemSandbox(
   pi: ExtensionAPI,
   guardedTools: ReadonlySet<string> = DEFAULT_FILESYSTEM_READ_TOOLS,
 ): void {
-  pi.on('tool_call', async (event, ctx) => {
+  pi.on('tool_call', (event, ctx) => {
     if (!guardedTools.has(event.toolName)) {
       return undefined;
     }

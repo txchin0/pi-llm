@@ -15,8 +15,8 @@ function createMockSession(
   return {
     isStreaming: handlers.isStreaming ?? false,
     subscribe: handlers.subscribe ?? (() => () => {}),
-    prompt: handlers.prompt ?? (async () => {}),
-    abort: handlers.abort ?? (async () => {}),
+    prompt: handlers.prompt ?? (() => Promise.resolve()),
+    abort: handlers.abort ?? (() => Promise.resolve()),
   } as AgentSession;
 }
 
@@ -37,8 +37,12 @@ describe('runAgentPrompt', () => {
     let unsubscribed = false;
     const session = createMockSession({
       subscribe(cb) {
-        cb({ type: 'agent_start' } as AgentSessionEvent);
-        cb({ type: 'agent_end' } as AgentSessionEvent);
+        cb({ type: 'agent_start' });
+        cb({
+          type: 'agent_end',
+          messages: [],
+          willRetry: false,
+        });
         return () => {
           unsubscribed = true;
         };
@@ -52,7 +56,7 @@ describe('runAgentPrompt', () => {
   });
 
   it('passes the message to session.prompt', async () => {
-    const prompt = vi.fn(async () => {});
+    const prompt = vi.fn(() => Promise.resolve());
     const session = createMockSession({ prompt });
 
     await collectEvents(session, 'test message');
@@ -63,19 +67,17 @@ describe('runAgentPrompt', () => {
   it('re-throws prompt errors after draining the queue', async () => {
     const session = createMockSession({
       subscribe(cb) {
-        cb({ type: 'agent_start' } as AgentSessionEvent);
+        cb({ type: 'agent_start' });
         return () => {};
       },
-      prompt: async () => {
-        throw new Error('prompt failed');
-      },
+      prompt: () => Promise.reject(new Error('prompt failed')),
     });
 
     await expect(collectEvents(session, 'hello')).rejects.toThrow('prompt failed');
   });
 
   it('aborts the session when the signal fires', async () => {
-    const abort = vi.fn(async () => {});
+    const abort = vi.fn(() => Promise.resolve());
     const controller = new AbortController();
     const session = createMockSession({
       subscribe() {
@@ -100,7 +102,7 @@ describe('runAgentPrompt', () => {
 
     const session = createMockSession({
       subscribe(cb) {
-        cb({ type: 'agent_start' } as AgentSessionEvent);
+        cb({ type: 'agent_start' });
         return () => {};
       },
     });

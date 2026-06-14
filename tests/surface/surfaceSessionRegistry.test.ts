@@ -1,13 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { SessionId } from '../../src/contracts/respond.js';
 import { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
 import { createMockTaskQueue } from '../helpers/mockTaskQueue.js';
 
-const createSurfaceSessionMock = vi.fn();
+const createSurfaceSessionMock = vi.fn<
+  (sessionId: string, userId: string) => Promise<{ isStreaming: boolean }>
+>();
 
 vi.mock('../../src/surface/createSurfaceSession.js', () => ({
-  createSurfaceSession: (...args: unknown[]) => createSurfaceSessionMock(...args),
+  createSurfaceSession: (
+    sessionId: string,
+    userId: string,
+  ): ReturnType<typeof createSurfaceSessionMock> =>
+    createSurfaceSessionMock(sessionId, userId),
 }));
 
 function createSession(isStreaming = false) {
@@ -38,8 +43,8 @@ describe('SurfaceSessionRegistry', () => {
   it('evicts an idle session when inserting past capacity', async () => {
     const registry = createRegistry(1);
 
-    await registry.getOrCreate('sess_a' as SessionId, 'user-a');
-    await registry.getOrCreate('sess_b' as SessionId, 'user-b');
+    await registry.getOrCreate('sess_a', 'user-a');
+    await registry.getOrCreate('sess_b', 'user-b');
 
     expect(createSurfaceSessionMock).toHaveBeenCalledTimes(2);
   });
@@ -48,10 +53,10 @@ describe('SurfaceSessionRegistry', () => {
     const registry = createRegistry(1);
 
     createSurfaceSessionMock.mockResolvedValueOnce(createSession(true));
-    await registry.getOrCreate('sess_busy' as SessionId, 'user-a');
+    await registry.getOrCreate('sess_busy', 'user-a');
 
     createSurfaceSessionMock.mockResolvedValueOnce(createSession());
-    await registry.getOrCreate('sess_new' as SessionId, 'user-b');
+    await registry.getOrCreate('sess_new', 'user-b');
 
     expect(createSurfaceSessionMock).toHaveBeenCalledTimes(2);
   });

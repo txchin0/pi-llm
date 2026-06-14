@@ -23,6 +23,11 @@ function createTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
 }
 
 describe('WorkerLoop', () => {
+  let claimNextPending: ReturnType<typeof vi.fn<WorkerTaskQueue['claimNextPending']>>;
+  let markCompleted: ReturnType<typeof vi.fn<WorkerTaskQueue['markCompleted']>>;
+  let markFailed: ReturnType<typeof vi.fn<WorkerTaskQueue['markFailed']>>;
+  let requeue: ReturnType<typeof vi.fn<WorkerTaskQueue['requeue']>>;
+  let runTask: ReturnType<typeof vi.fn<WorkerTaskService['runTask']>>;
   let taskQueue: WorkerTaskQueue;
   let workerTaskService: WorkerTaskService;
   let loop: WorkerLoop;
@@ -30,19 +35,25 @@ describe('WorkerLoop', () => {
   beforeEach(() => {
     vi.useFakeTimers();
 
+    claimNextPending = vi.fn<WorkerTaskQueue['claimNextPending']>().mockResolvedValue(null);
+    markCompleted = vi.fn<WorkerTaskQueue['markCompleted']>().mockResolvedValue(undefined);
+    markFailed = vi.fn<WorkerTaskQueue['markFailed']>().mockResolvedValue(undefined);
+    requeue = vi.fn<WorkerTaskQueue['requeue']>().mockResolvedValue(undefined);
+    runTask = vi.fn<WorkerTaskService['runTask']>().mockResolvedValue('done');
+
     taskQueue = {
       enqueue: vi.fn(),
       getById: vi.fn(),
       listByUser: vi.fn(),
-      claimNextPending: vi.fn().mockResolvedValue(null),
-      markCompleted: vi.fn().mockResolvedValue(undefined),
-      markFailed: vi.fn().mockResolvedValue(undefined),
-      requeue: vi.fn().mockResolvedValue(undefined),
+      claimNextPending,
+      markCompleted,
+      markFailed,
+      requeue,
       requeueStuckRunning: vi.fn().mockResolvedValue(0),
     };
 
     workerTaskService = {
-      runTask: vi.fn().mockResolvedValue('done'),
+      runTask,
     };
 
     loop = new WorkerLoop({
@@ -61,56 +72,49 @@ describe('WorkerLoop', () => {
 
   it('marks a claimed task completed when the service succeeds', async () => {
     const task = createTask();
-    vi.mocked(taskQueue.claimNextPending).mockResolvedValueOnce(task);
+    claimNextPending.mockResolvedValueOnce(task);
 
     loop.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(workerTaskService.runTask).toHaveBeenCalledWith(
-      task,
-      expect.any(AbortSignal),
-    );
-    expect(taskQueue.markCompleted).toHaveBeenCalledWith(task.id, 'done');
+    expect(runTask).toHaveBeenCalledWith(task, expect.any(AbortSignal));
+    expect(markCompleted).toHaveBeenCalledWith(task.id, 'done');
   });
 
   it('requeues a failed task while retries remain', async () => {
     const task = createTask({ retryCount: 0 });
-    vi.mocked(taskQueue.claimNextPending).mockResolvedValueOnce(task);
-    vi.mocked(workerTaskService.runTask).mockRejectedValueOnce(
-      new Error('transient'),
-    );
+    claimNextPending.mockResolvedValueOnce(task);
+    runTask.mockRejectedValueOnce(new Error('transient'));
 
     loop.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(taskQueue.requeue).toHaveBeenCalledWith(task.id, 'transient');
-    expect(taskQueue.markFailed).not.toHaveBeenCalled();
+    expect(requeue).toHaveBeenCalledWith(task.id, 'transient');
+    expect(markFailed).not.toHaveBeenCalled();
   });
 
   it('marks a task failed after retries are exhausted', async () => {
     const task = createTask({ retryCount: 2 });
-    vi.mocked(taskQueue.claimNextPending).mockResolvedValueOnce(task);
-    vi.mocked(workerTaskService.runTask).mockRejectedValueOnce(
-      new Error('permanent'),
-    );
+    claimNextPending.mockResolvedValueOnce(task);
+    runTask.mockRejectedValueOnce(new Error('permanent'));
 
     loop.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(taskQueue.requeue).not.toHaveBeenCalled();
-    expect(taskQueue.markFailed).toHaveBeenCalledWith(task.id, 'permanent');
+    expect(requeue).not.toHaveBeenCalled();
+    expect(markFailed).toHaveBeenCalledWith(task.id, 'permanent');
   });
 
   it('does not claim another task while one is in flight', async () => {
     const first = createTask({ id: 'task_first00000001' });
     const second = createTask({ id: 'task_second00000002' });
 
-    vi.mocked(taskQueue.claimNextPending)
+    claimNextPending
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(second);
 
     let releaseFirst: (() => void) | undefined;
-    vi.mocked(workerTaskService.runTask).mockImplementationOnce(
+    runTask.mockImplementationOnce(
       () =>
         new Promise<string>((resolve) => {
           releaseFirst = () => resolve('done');
@@ -120,29 +124,33 @@ describe('WorkerLoop', () => {
     loop.start();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(taskQueue.claimNextPending).toHaveBeenCalledTimes(1);
-    expect(workerTaskService.runTask).toHaveBeenCalledTimes(1);
+    expect(claimNextPending).toHaveBeenCalledTimes(1);
+    expect(runTask).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(1000);
-    expect(taskQueue.claimNextPending).toHaveBeenCalledTimes(1);
+    expect(claimNextPending).toHaveBeenCalledTimes(1);
 
     releaseFirst?.();
     await vi.advanceTimersByTimeAsync(1000);
 
-    expect(taskQueue.claimNextPending).toHaveBeenCalledTimes(2);
-    expect(workerTaskService.runTask).toHaveBeenCalledTimes(2);
+    expect(claimNextPending).toHaveBeenCalledTimes(2);
+    expect(runTask).toHaveBeenCalledTimes(2);
   });
 
   it('marks a task failed when the service times out', async () => {
     const task = createTask({ retryCount: 2 });
-    vi.mocked(taskQueue.claimNextPending).mockResolvedValueOnce(task);
-    vi.mocked(workerTaskService.runTask).mockImplementationOnce(
-      (_task, signal) =>
-        new Promise<string>((_resolve, reject) => {
-          signal.addEventListener('abort', () => {
-            reject(signal.reason ?? new Error('Worker task timed out'));
-          });
-        }),
+    claimNextPending.mockResolvedValueOnce(task);
+    runTask.mockImplementationOnce((_task, signal) =>
+      new Promise<string>((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          const reason: unknown = signal.reason;
+          reject(
+            reason instanceof Error
+              ? reason
+              : new Error('Worker task timed out'),
+          );
+        });
+      }),
     );
 
     loop = new WorkerLoop({
@@ -156,9 +164,6 @@ describe('WorkerLoop', () => {
     loop.start();
     await vi.advanceTimersByTimeAsync(1100);
 
-    expect(taskQueue.markFailed).toHaveBeenCalledWith(
-      task.id,
-      'Worker task timed out',
-    );
+    expect(markFailed).toHaveBeenCalledWith(task.id, 'Worker task timed out');
   });
 });

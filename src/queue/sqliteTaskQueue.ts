@@ -212,10 +212,10 @@ export async function createSqliteTaskQueue(
       return rows.map((row) => mapRowToTaskListRecord(row));
     },
 
-    async claimNextPending() {
+    claimNextPending() {
       const record = claimNextPendingSync();
       if (!record) {
-        return null;
+        return Promise.resolve(null);
       }
 
       options.log?.info(
@@ -228,63 +228,87 @@ export async function createSqliteTaskQueue(
         'task claimed',
       );
 
-      return record;
+      return Promise.resolve(record);
     },
 
-    async markCompleted(taskId, result) {
-      const now = new Date().toISOString();
-      const changes = db
-        .update(tasks)
-        .set({ status: 'completed', result, updatedAt: now })
-        .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
-        .run().changes;
+    markCompleted(taskId, result) {
+      try {
+        const now = new Date().toISOString();
+        const changes = db
+          .update(tasks)
+          .set({ status: 'completed', result, updatedAt: now })
+          .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+          .run().changes;
 
-      assertRunningTaskUpdated(taskId, changes);
+        assertRunningTaskUpdated(taskId, changes);
 
-      options.log?.info(
-        { event: 'task.completed', task_id: taskId },
-        'task completed',
-      );
+        options.log?.info(
+          { event: 'task.completed', task_id: taskId },
+          'task completed',
+        );
+
+        return Promise.resolve();
+      } catch (error) {
+        return Promise.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     },
 
-    async markFailed(taskId, errorMessage) {
-      const now = new Date().toISOString();
-      const changes = db
-        .update(tasks)
-        .set({ status: 'failed', errorMessage, updatedAt: now })
-        .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
-        .run().changes;
+    markFailed(taskId, errorMessage) {
+      try {
+        const now = new Date().toISOString();
+        const changes = db
+          .update(tasks)
+          .set({ status: 'failed', errorMessage, updatedAt: now })
+          .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+          .run().changes;
 
-      assertRunningTaskUpdated(taskId, changes);
+        assertRunningTaskUpdated(taskId, changes);
 
-      options.log?.info(
-        { event: 'task.failed', task_id: taskId },
-        'task failed',
-      );
+        options.log?.info(
+          { event: 'task.failed', task_id: taskId },
+          'task failed',
+        );
+
+        return Promise.resolve();
+      } catch (error) {
+        return Promise.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     },
 
-    async requeue(taskId, errorMessage) {
-      const now = new Date().toISOString();
-      const changes = db
-        .update(tasks)
-        .set({
-          status: 'pending',
-          retryCount: sql`${tasks.retryCount} + 1`,
-          errorMessage,
-          updatedAt: now,
-        })
-        .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
-        .run().changes;
+    requeue(taskId, errorMessage) {
+      try {
+        const now = new Date().toISOString();
+        const changes = db
+          .update(tasks)
+          .set({
+            status: 'pending',
+            retryCount: sql`${tasks.retryCount} + 1`,
+            errorMessage,
+            updatedAt: now,
+          })
+          .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+          .run().changes;
 
-      assertRunningTaskUpdated(taskId, changes);
+        assertRunningTaskUpdated(taskId, changes);
 
-      options.log?.info(
-        { event: 'task.requeued', task_id: taskId },
-        'task requeued',
-      );
+        options.log?.info(
+          { event: 'task.requeued', task_id: taskId },
+          'task requeued',
+        );
+
+        return Promise.resolve();
+      } catch (error) {
+        return Promise.reject(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
     },
 
-    async requeueStuckRunning() {
+    requeueStuckRunning() {
       const now = new Date().toISOString();
       const changes = db
         .update(tasks)
@@ -299,7 +323,7 @@ export async function createSqliteTaskQueue(
         );
       }
 
-      return changes;
+      return Promise.resolve(changes);
     },
   };
 

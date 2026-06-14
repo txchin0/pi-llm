@@ -9,7 +9,7 @@ import {
   truncateUtf8,
 } from '../../src/surface/exaMcpClient.js';
 
-const connectMock = vi.fn(async () => undefined);
+const connectMock = vi.fn(() => Promise.resolve(undefined));
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
   Client: vi.fn().mockImplementation(function MockClient(this: {
@@ -17,7 +17,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
     close: () => Promise<void>;
   }) {
     this.connect = connectMock;
-    this.close = vi.fn(async () => undefined);
+    this.close = vi.fn(() => Promise.resolve(undefined));
   }),
 }));
 

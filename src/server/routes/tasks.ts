@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import type { RequestId } from '../../contracts/respond.js';
 import { createChildLogger, type AppLogger } from '../../logging/index.js';
 import type { ListTasksController } from '../../tasks/listTasksController.js';
 
@@ -15,7 +14,7 @@ export function registerTasksRoute(
   options: RegisterTasksRouteOptions,
 ): void {
   app.get('/v1/tasks', async (request: FastifyRequest, reply: FastifyReply) => {
-    const requestId = request.id as RequestId;
+    const requestId = request.id;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
       component: 'tasks.route',

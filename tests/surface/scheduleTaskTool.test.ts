@@ -19,8 +19,9 @@ function createContext(sessionManager: SessionHistoryReader): ExtensionContext {
 
 describe('executeScheduleTask', () => {
   it('rejects an empty description', async () => {
+    const enqueue = vi.fn();
     const taskQueue = {
-      enqueue: vi.fn(),
+      enqueue,
     } as unknown as TaskQueue;
 
     const result = await executeScheduleTask(
@@ -35,7 +36,7 @@ describe('executeScheduleTask', () => {
     );
 
     expect(result.content[0]?.text).toContain('non-empty');
-    expect(taskQueue.enqueue).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
   });
 
   it('enqueues a task with server-built context', async () => {
@@ -50,10 +51,11 @@ describe('executeScheduleTask', () => {
           content: 'Set a reminder for tomorrow',
           timestamp: Date.now(),
         },
-      } as SessionEntry,
+      },
     ]);
 
-    const enqueue = vi.fn(async () => ({
+    const enqueue = vi.fn(() =>
+      Promise.resolve({
       id: 'task_abc123def45678',
       userId: 'web-user',
       sessionId: 'sess_test00000001',
@@ -65,7 +67,8 @@ describe('executeScheduleTask', () => {
       retryCount: 0,
       result: null,
       errorMessage: null,
-    }));
+      }),
+    );
 
     const result = await executeScheduleTask(
       {

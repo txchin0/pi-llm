@@ -75,6 +75,7 @@ export async function* runAgentPrompt(
     throwIfAborted(signal);
 
     if (promptError !== undefined) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- preserve Pi session rejection as-is
       throw promptError;
     }
   } finally {

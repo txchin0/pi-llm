@@ -5,5 +5,5 @@ export function createChildLogger(
   parent: AppLogger,
   context: LogContext,
 ): AppLogger {
-  return parent.child(context as Record<string, unknown>);
+  return parent.child({ ...context });
 }

@@ -12,8 +12,9 @@ import {
 function createCaptureLogger(level: string) {
   const chunks: string[] = [];
   const stream = new Writable({
-    write(chunk, _encoding, callback) {
-      chunks.push(chunk.toString());
+    write(chunk: Buffer | string, _encoding, callback) {
+      const text = typeof chunk === 'string' ? chunk : chunk.toString();
+      chunks.push(text);
       callback();
     },
   });
@@ -38,25 +39,25 @@ describe('createRootLogger', () => {
   });
 
   it('produces no output at silent level', () => {
-    const { logger, getLines } = createCaptureLogger('silent');
+    const capture = createCaptureLogger('silent');
 
-    logger.info({ event: 'server.started' }, 'should not appear');
+    capture.logger.info({ event: 'server.started' }, 'should not appear');
 
-    expect(getLines()).toHaveLength(0);
+    expect(capture.getLines()).toHaveLength(0);
   });
 });
 
 describe('createChildLogger', () => {
   it('merges context fields into log output', () => {
-    const { logger, getLines } = createCaptureLogger('info');
-    const child = createChildLogger(logger, {
+    const capture = createCaptureLogger('info');
+    const child = createChildLogger(capture.logger, {
       component: 'respond.route',
       request_id: 'req_test00000001',
     });
 
     child.info({ event: 'respond.request.completed' }, 'done');
 
-    expect(getLines()[0]).toMatchObject({
+    expect(capture.getLines()[0]).toMatchObject({
       component: 'respond.route',
       request_id: 'req_test00000001',
       event: 'respond.request.completed',
@@ -67,35 +68,35 @@ describe('createChildLogger', () => {
 
 describe('logInboundMessage', () => {
   it('includes full message at debug', () => {
-    const { logger, getLines } = createCaptureLogger('debug');
+    const capture = createCaptureLogger('debug');
 
-    logInboundMessage(logger, { message: 'hello world' });
+    logInboundMessage(capture.logger, { message: 'hello world' });
 
-    expect(getLines()[0]).toMatchObject({
+    expect(capture.getLines()[0]).toMatchObject({
       event: 'respond.request.received',
       message: 'hello world',
     });
-    expect(getLines()[0]).not.toHaveProperty('message_length');
+    expect(capture.getLines()[0]).not.toHaveProperty('message_length');
   });
 
   it('includes only message_length at info', () => {
-    const { logger, getLines } = createCaptureLogger('info');
+    const capture = createCaptureLogger('info');
 
-    logInboundMessage(logger, { message: 'hello world' });
+    logInboundMessage(capture.logger, { message: 'hello world' });
 
-    expect(getLines()[0]).toMatchObject({
+    expect(capture.getLines()[0]).toMatchObject({
       event: 'respond.request.received',
       message_length: 11,
     });
-    expect(getLines()[0]).not.toHaveProperty('message');
+    expect(capture.getLines()[0]).not.toHaveProperty('message');
   });
 });
 
 describe('logRespondSseEvent', () => {
   it('includes tool input at debug', () => {
-    const { logger, getLines } = createCaptureLogger('debug');
+    const capture = createCaptureLogger('debug');
 
-    logRespondSseEvent(logger, {
+    logRespondSseEvent(capture.logger, {
       type: 'tool_call',
       request_id: 'req_test00000001',
       session_id: 'sess_test00000001',
@@ -105,7 +106,7 @@ describe('logRespondSseEvent', () => {
       input: { date: '2026-06-10' },
     });
 
-    expect(getLines()[0]).toMatchObject({
+    expect(capture.getLines()[0]).toMatchObject({
       event: 'tool.call',
       tool_name: 'calendar_read',
       input: { date: '2026-06-10' },
@@ -113,9 +114,9 @@ describe('logRespondSseEvent', () => {
   });
 
   it('omits tool input at info', () => {
-    const { logger, getLines } = createCaptureLogger('info');
+    const capture = createCaptureLogger('info');
 
-    logRespondSseEvent(logger, {
+    logRespondSseEvent(capture.logger, {
       type: 'tool_call',
       request_id: 'req_test00000001',
       session_id: 'sess_test00000001',
@@ -125,10 +126,10 @@ describe('logRespondSseEvent', () => {
       input: { date: '2026-06-10' },
     });
 
-    expect(getLines()[0]).toMatchObject({
+    expect(capture.getLines()[0]).toMatchObject({
       event: 'tool.call',
       tool_name: 'calendar_read',
     });
-    expect(getLines()[0]).not.toHaveProperty('input');
+    expect(capture.getLines()[0]).not.toHaveProperty('input');
   });
 });

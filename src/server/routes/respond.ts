@@ -1,6 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-import type { RequestId } from '../../contracts/respond.js';
 import {
   createChildLogger,
   logRespondSseEvent,
@@ -38,7 +37,7 @@ export function registerRespondRoute(
   options: RegisterRespondRouteOptions,
 ): void {
   app.post('/v1/respond', async (request: FastifyRequest, reply: FastifyReply) => {
-    const requestId = request.id as RequestId;
+    const requestId = request.id;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
       component: 'respond.route',

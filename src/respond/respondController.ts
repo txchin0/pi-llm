@@ -26,12 +26,12 @@ export type RespondControllerDependencies = {
 
 /** Generates a `req_`-prefixed request id. */
 function defaultRequestIdFactory(): RequestId {
-  return `req_${randomBytes(8).toString('hex')}` as RequestId;
+  return `req_${randomBytes(8).toString('hex')}`;
 }
 
 /** Generates a `sess_`-prefixed session id for first-turn requests. */
 function defaultSessionIdFactory(): SessionId {
-  return `sess_${randomBytes(8).toString('hex')}` as SessionId;
+  return `sess_${randomBytes(8).toString('hex')}`;
 }
 
 /** Builds the SSE error event returned when request validation fails. */

@@ -1,4 +1,4 @@
-import pino, { type Logger, type LoggerOptions } from 'pino';
+import pino, { type LoggerOptions } from 'pino';
 
 import { env } from '../config/env.js';
 import type { AppLogger } from './types.js';
@@ -44,7 +44,7 @@ export function createRootLogger(
   };
 
   if (options.destination) {
-    return pino(loggerOptions, options.destination) as Logger & AppLogger;
+    return pino(loggerOptions, options.destination);
   }
 
   if (pretty) {
@@ -57,8 +57,8 @@ export function createRootLogger(
           ignore: 'pid,hostname',
         },
       },
-    }) as Logger & AppLogger;
+    });
   }
 
-  return pino(loggerOptions) as Logger & AppLogger;
+  return pino(loggerOptions);
 }

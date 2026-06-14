@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ListTasksResponseSchema } from '../../src/contracts/tasks.js';
 import { resolveMigrationsFolder } from '../../src/queue/resolveMigrationsFolder.js';
 import { createSqliteTaskQueue } from '../../src/queue/sqliteTaskQueue.js';
 import type { TaskStatus } from '../../src/queue/taskTypes.js';
@@ -72,7 +73,7 @@ describe('GET /v1/tasks', () => {
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
 
-    const body = response.json() as { tasks: Array<{ id: string }> };
+    const body = ListTasksResponseSchema.parse(response.json());
     expect(body.tasks.map((task) => task.id)).toEqual([pending.id, running.id]);
 
     await app.close();
@@ -99,7 +100,7 @@ describe('GET /v1/tasks', () => {
       query: { user_id: 'web-user', status: 'completed' },
     });
 
-    const body = response.json() as { tasks: Array<{ id: string; status: string }> };
+    const body = ListTasksResponseSchema.parse(response.json());
     expect(body.tasks).toHaveLength(1);
     expect(body.tasks[0]?.id).toBe(completed.id);
     expect(body.tasks[0]?.status).toBe('completed');
@@ -126,7 +127,7 @@ describe('GET /v1/tasks', () => {
       query: { user_id: 'user-a' },
     });
 
-    const body = response.json() as { tasks: Array<{ id: string }> };
+    const body = ListTasksResponseSchema.parse(response.json());
     expect(body.tasks).toHaveLength(1);
     expect(body.tasks[0]?.id).toBe(userTask.id);
 
@@ -189,7 +190,7 @@ describe('GET /v1/tasks', () => {
       query: { user_id: 'web-user' },
     });
 
-    const body = response.json() as { tasks: Array<Record<string, unknown>> };
+    const body = ListTasksResponseSchema.parse(response.json());
     expect(body.tasks).toHaveLength(1);
     expect(body.tasks[0]).toMatchObject({
       description: 'queued task',

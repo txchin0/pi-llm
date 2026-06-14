@@ -8,7 +8,7 @@ import { isPathInsideWorkspace } from '../../src/surface/util/isPathInsideWorksp
 
 const tempDirs: string[] = [];
 
-afterEach(async () => {
+afterEach(() => {
   tempDirs.length = 0;
 });
 

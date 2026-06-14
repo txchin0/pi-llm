@@ -139,8 +139,8 @@ const surfaceLlmConfig = {
 describe('checkSurfaceLlmEndpoint', () => {
   it('returns ok when the configured model id is listed by the server', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () =>
-      Response.json({ data: [{ id: 'gemma-4-12b-qat' }] });
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ data: [{ id: 'gemma-4-12b-qat' }] }));
 
     await expect(checkSurfaceLlmEndpoint(surfaceLlmConfig)).resolves.toEqual({
       ok: true,
@@ -151,29 +151,32 @@ describe('checkSurfaceLlmEndpoint', () => {
 
   it('returns a message when the model id is not listed', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () =>
-      Response.json({ data: [{ id: 'gemma-4-12b-qat' }] });
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ data: [{ id: 'gemma-4-12b-qat' }] }));
 
-    await expect(
-      checkSurfaceLlmEndpoint({ ...surfaceLlmConfig, modelId: 'local' }),
-    ).resolves.toEqual({
-      ok: false,
-      message: expect.stringMatching(/SURFACE_LLM_MODEL_ID "local"/),
+    const result = await checkSurfaceLlmEndpoint({
+      ...surfaceLlmConfig,
+      modelId: 'local',
     });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/SURFACE_LLM_MODEL_ID "local"/);
+    }
 
     globalThis.fetch = originalFetch;
   });
 
   it('returns a message on network failure', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => {
-      throw new Error('connection refused');
-    };
+    globalThis.fetch = () => Promise.reject(new Error('connection refused'));
 
-    await expect(checkSurfaceLlmEndpoint(surfaceLlmConfig)).resolves.toEqual({
-      ok: false,
-      message: expect.stringMatching(/Cannot reach surface LLM/),
-    });
+    const result = await checkSurfaceLlmEndpoint(surfaceLlmConfig);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/Cannot reach surface LLM/);
+    }
 
     globalThis.fetch = originalFetch;
   });
@@ -182,9 +185,7 @@ describe('checkSurfaceLlmEndpoint', () => {
 describe('warnSurfaceLlmEndpoint', () => {
   it('logs a warning and does not throw when the endpoint check fails', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () => {
-      throw new Error('connection refused');
-    };
+    globalThis.fetch = () => Promise.reject(new Error('connection refused'));
 
     const warnings: Array<{ obj: object; msg: string | undefined }> = [];
     const log = {
@@ -197,12 +198,9 @@ describe('warnSurfaceLlmEndpoint', () => {
       warnSurfaceLlmEndpoint(surfaceLlmConfig, log),
     ).resolves.toBeUndefined();
 
-    expect(warnings).toEqual([
-      {
-        obj: { event: 'surface.llm.endpoint_warning' },
-        msg: expect.stringMatching(/Cannot reach surface LLM/),
-      },
-    ]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.obj).toEqual({ event: 'surface.llm.endpoint_warning' });
+    expect(warnings[0]?.msg).toMatch(/Cannot reach surface LLM/);
 
     globalThis.fetch = originalFetch;
   });
@@ -211,8 +209,8 @@ describe('warnSurfaceLlmEndpoint', () => {
 describe('validateSurfaceLlmEndpoint', () => {
   it('accepts a configured model id returned by the server', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () =>
-      Response.json({ data: [{ id: 'gemma-4-12b-qat' }] });
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ data: [{ id: 'gemma-4-12b-qat' }] }));
 
     await expect(
       validateSurfaceLlmEndpoint(surfaceLlmConfig),
@@ -223,8 +221,8 @@ describe('validateSurfaceLlmEndpoint', () => {
 
   it('rejects unknown model ids with available models listed', async () => {
     const originalFetch = globalThis.fetch;
-    globalThis.fetch = async () =>
-      Response.json({ data: [{ id: 'gemma-4-12b-qat' }] });
+    globalThis.fetch = () =>
+      Promise.resolve(Response.json({ data: [{ id: 'gemma-4-12b-qat' }] }));
 
     await expect(
       validateSurfaceLlmEndpoint({ ...surfaceLlmConfig, modelId: 'local' }),

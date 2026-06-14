@@ -42,6 +42,7 @@ describe('RespondController', () => {
   it('yields start then delegates to the service', async () => {
     const service: RespondService = {
       async *handleTurn() {
+        await Promise.resolve();
         yield { type: 'delta', text: 'hi' };
       },
     };
