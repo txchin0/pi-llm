@@ -9,4 +9,5 @@ export interface IntegrationStore {
   get(userId: string, id: string): Promise<UserIntegrationState | null>;
   list(userId: string): Promise<Record<string, UserIntegrationState>>;
   set(userId: string, id: string, state: UserIntegrationState): Promise<void>;
+  setMany(userId: string, updates: Record<string, UserIntegrationState>): Promise<void>;
 }

@@ -15,6 +15,7 @@ describe('resolveEnabledIntegrations', () => {
       get: () => Promise.resolve(null),
       list: () => Promise.resolve({ web_search: { enabled: false } }),
       set: () => Promise.resolve(),
+      setMany: () => Promise.resolve(),
     };
 
     const enabled = await resolveEnabledIntegrations(store, 'user-a');
@@ -29,6 +30,7 @@ describe('resolveEnabledIntegrations', () => {
           web_search: { enabled: true, config: { apiKey: ' user-key ' } },
         }),
       set: () => Promise.resolve(),
+      setMany: () => Promise.resolve(),
     };
 
     const enabled = await resolveEnabledIntegrations(store, 'user-a');
@@ -43,6 +45,7 @@ describe('resolveEnabledIntegrations', () => {
           unknown_integration: { enabled: true },
         }),
       set: () => Promise.resolve(),
+      setMany: () => Promise.resolve(),
     };
 
     const enabled = await resolveEnabledIntegrations(store, 'user-a');

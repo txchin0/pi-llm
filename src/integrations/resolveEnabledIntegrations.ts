@@ -1,4 +1,6 @@
 import type { AppLogger } from '../logging/types.js';
+import { effectiveEnabled } from './integrationState.js';
+import { parseIntegrationConfig } from './parseIntegrationConfig.js';
 import { listIntegrations } from './registry.js';
 import type { IntegrationStore } from './store/integrationStore.js';
 import type { EnabledIntegration } from './types.js';
@@ -18,8 +20,7 @@ export async function resolveEnabledIntegrations(
 
   for (const definition of listIntegrations()) {
     const storedState = stored[definition.id];
-    const isEnabled = storedState?.enabled ?? definition.defaultEnabled;
-    if (!isEnabled) {
+    if (!effectiveEnabled(definition, storedState)) {
       continue;
     }
 
@@ -29,29 +30,4 @@ export async function resolveEnabledIntegrations(
   }
 
   return enabled;
-}
-
-/** Parses stored config via the integration's parser, falling back to `{}` on failure. */
-function parseIntegrationConfig(
-  definition: EnabledIntegration['definition'],
-  raw: Record<string, unknown>,
-  log?: AppLogger,
-): unknown {
-  if (definition.parseConfig === undefined) {
-    return {};
-  }
-
-  try {
-    return definition.parseConfig(raw);
-  } catch (error) {
-    log?.warn(
-      {
-        event: 'integrations.config.parse_failed',
-        integration_id: definition.id,
-        err: error,
-      },
-      'integration config parse failed; using defaults',
-    );
-    return {};
-  }
 }

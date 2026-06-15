@@ -29,6 +29,13 @@ export function createFileIntegrationStore(
       all[id] = state;
       await writeIntegrationsFile(path, all);
     },
+
+    async setMany(userId, updates) {
+      const path = resolveUserIntegrationsPath(options.dataRoot, userId);
+      const all = await readIntegrationsFile(path);
+      Object.assign(all, updates);
+      await writeIntegrationsFile(path, all);
+    },
   };
 }
 

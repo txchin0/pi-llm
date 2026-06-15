@@ -13,4 +13,8 @@ export const noopIntegrationStore: IntegrationStore = {
   set(): Promise<void> {
     return Promise.resolve();
   },
+
+  setMany(): Promise<void> {
+    return Promise.resolve();
+  },
 };

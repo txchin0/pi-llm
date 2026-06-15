@@ -9,25 +9,32 @@ import {
 } from '../logging/index.js';
 import { noopTaskQueue } from '../queue/noopTaskQueue.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
+import { noopIntegrationStore } from '../integrations/store/noopIntegrationStore.js';
+import type { IntegrationStore } from '../integrations/store/integrationStore.js';
+import { createIntegrationService } from '../integrations/integrationService.js';
+import { IntegrationsController } from '../integrations/integrationsController.js';
 import {
   RespondController,
   type RespondControllerDependencies,
 } from '../respond/respondController.js';
 import { ListTasksController } from '../tasks/listTasksController.js';
 import { createTaskListService } from '../tasks/taskListService.js';
+import { registerIntegrationsRoute } from './routes/integrations.js';
 import { registerRespondRoute } from './routes/respond.js';
 import { registerTasksRoute } from './routes/tasks.js';
 
 export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
   taskQueue?: TaskQueue;
+  integrationStore?: IntegrationStore;
 };
 
-/** Creates a Fastify instance with respond and tasks routes. */
+/** Creates a Fastify instance with respond, tasks, and integrations routes. */
 export function buildServer(options: BuildServerOptions = {}) {
   const {
     logger = createRootLogger(),
     taskQueue = noopTaskQueue,
+    integrationStore = noopIntegrationStore,
     ...controllerOptions
   } = options;
   const requestIdFactory =
@@ -68,6 +75,13 @@ export function buildServer(options: BuildServerOptions = {}) {
     logger,
   });
   registerTasksRoute(app, { controller: listTasksController, logger });
+
+  const integrationService = createIntegrationService({ store: integrationStore });
+  const integrationsController = new IntegrationsController({
+    service: integrationService,
+    logger,
+  });
+  registerIntegrationsRoute(app, { controller: integrationsController, logger });
 
   return app;
 }

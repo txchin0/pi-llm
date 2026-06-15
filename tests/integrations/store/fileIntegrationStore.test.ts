@@ -50,6 +50,21 @@ describe('createFileIntegrationStore', () => {
     });
   });
 
+  it('merges multiple ids atomically via setMany', async () => {
+    const { store } = await createTempStore();
+    await store.set('user-a', 'web_search', { enabled: true, config: { apiKey: 'k' } });
+
+    await store.setMany('user-a', {
+      web_search: { enabled: false, config: { apiKey: 'k' } },
+      calendar: { enabled: true },
+    });
+
+    await expect(store.list('user-a')).resolves.toEqual({
+      web_search: { enabled: false, config: { apiKey: 'k' } },
+      calendar: { enabled: true },
+    });
+  });
+
   it('persists JSON under the user integrations path', async () => {
     const { store, dataRoot } = await createTempStore();
     await store.set('user-b', 'web_search', { enabled: true });

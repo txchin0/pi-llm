@@ -74,7 +74,7 @@ export async function startServer(): Promise<void> {
   });
 
   const service = createSurfaceRespondService({ registry, logger });
-  const app = buildServer({ logger, service, taskQueue });
+  const app = buildServer({ logger, service, taskQueue, integrationStore });
 
   let workerLoop: WorkerLoop | undefined;
   if (env.WORKER_ENABLED) {

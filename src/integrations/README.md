@@ -78,11 +78,20 @@ Rules:
 - Unknown integration ids in the file are ignored.
 - Invalid `config` → logged, falls back to `{}`.
 
-There is no HTTP management API yet. For local testing, edit `integrations.json` directly or use `IntegrationStore.set` in tests.
+### HTTP API
 
-### Surface session snapshot
+Enablement toggles are exposed over HTTP. Credentials and other `config` fields are **not** on the wire — edit `integrations.json` directly or use env fallbacks (e.g. `EXA_API_KEY` for `web_search`).
 
-Surface sessions cache integration state at creation. If a user toggles an integration, they need a new `session_id` or LRU eviction before the surface agent sees the change. Worker tasks always resolve fresh state per task.
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/v1/integrations?user_id=...` | List registered integrations with `id`, `label`, `default_enabled`, and effective `enabled` |
+| `PUT` | `/v1/integrations` | Bulk enable/disable: body `{ user_id, integrations: { "<id>": { enabled: boolean } } }` |
+
+`PUT` preserves existing stored `config` for each touched integration. Omitted integration ids are left unchanged.
+
+Surface sessions cache integration state at creation. If a user toggles an integration via HTTP, they need a new `session_id` or LRU eviction before the surface agent sees the change. Worker tasks always resolve fresh state per task.
+
+For local testing without HTTP, edit `integrations.json` directly or use `IntegrationStore.set` in tests.
 
 ## Step-by-step: add a new integration
 
