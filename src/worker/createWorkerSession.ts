@@ -9,6 +9,10 @@ import type {
   WorkerAgentConfig,
   WorkerModel,
 } from '../config/workerAgent.js';
+import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
+import { WORKER_BASE_TOOLS } from '../integrations/baseTools.js';
+import { buildIntegrationSessionExtras } from '../integrations/buildIntegrationSessionExtras.js';
+import type { EnabledIntegration } from '../integrations/types.js';
 import type { AppLogger } from '../logging/types.js';
 import { buildWorkerSystemPrompt } from './buildWorkerSystemPrompt.js';
 import { createWorkerExtension } from './extensions/workerExtension.js';
@@ -23,6 +27,7 @@ export type CreateWorkerSessionOptions = {
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
   workerAgentConfig: WorkerAgentConfig;
+  enabledIntegrations: EnabledIntegration[];
   log?: AppLogger;
 };
 
@@ -41,19 +46,29 @@ export async function createWorkerSession(
     retry: { enabled: false },
   });
 
+  const integrationExtras = buildIntegrationSessionExtras(
+    options.enabledIntegrations,
+    'worker',
+    {
+      userId: options.userId,
+      ...(options.log !== undefined ? { log: options.log } : {}),
+    },
+  );
+  assertToolAllowlistSync(WORKER_BASE_TOOLS, integrationExtras.toolNames);
+
   const resourceLoader = await createSurfaceResourceLoader({
     cwd: options.userMemoryWorkspace,
     dataRoot: options.dataRoot,
-    systemPrompt: buildWorkerSystemPrompt(),
+    systemPrompt: buildWorkerSystemPrompt(integrationExtras.promptFragments),
     settingsManager,
-    extensionFactories: [createWorkerExtension],
+    extensionFactories: [createWorkerExtension, integrationExtras.extensionFactory],
   });
 
   const { session, extensionsResult } = await createAgentSession({
     cwd: options.userMemoryWorkspace,
     model: options.model,
     thinkingLevel: options.workerAgentConfig.thinkingLevel,
-    tools: ['read', 'write', 'edit', 'ls', 'grep', 'find', 'web_search'],
+    tools: [...WORKER_BASE_TOOLS, ...integrationExtras.toolNames],
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
     resourceLoader,

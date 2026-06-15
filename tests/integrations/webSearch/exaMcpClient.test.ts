@@ -7,7 +7,7 @@ import {
   ExaMcpError,
   getExaMcpClient,
   truncateUtf8,
-} from '../../src/surface/exaMcpClient.js';
+} from '../../../src/integrations/webSearch/exaMcpClient.js';
 
 const connectMock = vi.fn(() => Promise.resolve(undefined));
 

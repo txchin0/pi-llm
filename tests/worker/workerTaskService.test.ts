@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { noopIntegrationStore } from '../../src/integrations/store/noopIntegrationStore.js';
 import type { TaskRecord } from '../../src/queue/taskTypes.js';
 import { buildWorkerTaskPrompt } from '../../src/worker/buildWorkerTaskPrompt.js';
 import {
@@ -40,6 +41,7 @@ describe('createWorkerTaskService', () => {
       modelRegistry: {} as never,
       model: {} as never,
       workerAgentConfig: {} as never,
+      integrationStore: noopIntegrationStore,
       now: () => '2026-01-01T12:00:00.000+11:00',
       createSession,
       runPrompt,
@@ -79,6 +81,7 @@ describe('createWorkerTaskService', () => {
       modelRegistry: {} as never,
       model: {} as never,
       workerAgentConfig: {} as never,
+      integrationStore: noopIntegrationStore,
       createSession: vi
         .fn()
         .mockResolvedValue({ prompt: vi.fn() }) as WorkerSessionFactory,

@@ -8,6 +8,8 @@ import type {
   WorkerModel,
 } from '../config/workerAgent.js';
 import type { AppLogger } from '../logging/types.js';
+import type { IntegrationStore } from '../integrations/store/integrationStore.js';
+import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
 import type { TaskRecord } from '../queue/taskTypes.js';
 import { formatNowInTimezone } from '../surface/util/enrichUserMessage.js';
 
@@ -34,6 +36,7 @@ export type WorkerTaskServiceDependencies = {
   modelRegistry: ModelRegistry;
   model: WorkerModel;
   workerAgentConfig: WorkerAgentConfig;
+  integrationStore: IntegrationStore;
   logger?: AppLogger;
   now?: () => string;
   createSession?: WorkerSessionFactory;
@@ -130,6 +133,12 @@ export function createWorkerTaskService(
         task.userId,
       );
 
+      const enabledIntegrations = await resolveEnabledIntegrations(
+        dependencies.integrationStore,
+        task.userId,
+        log ? { log } : {},
+      );
+
       const sessionOptions = {
         userId: task.userId,
         userMemoryWorkspace,
@@ -138,6 +147,7 @@ export function createWorkerTaskService(
         authStorage: dependencies.authStorage,
         modelRegistry: dependencies.modelRegistry,
         workerAgentConfig: dependencies.workerAgentConfig,
+        enabledIntegrations,
       };
 
       const session = await createSession(

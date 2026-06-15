@@ -4,12 +4,9 @@
 - [x] Queue (`schedule_task` + SQLite persistence)
 - [ ] Calendar
 - [ ] Todo list
-### Queue
-- [ ] Add frontend view
+
 ### Worker System
 - [ ] Add worker system (dequeue, idle detection, task execution)
-### Documentation & Templates
-- [ ] Add template to LLM wiki
 ### System Prompt
 - [x] Update system prompt (`schedule_task` guidance in `buildSurfaceSystemPrompt.ts`)
 ### Frontend Features
@@ -18,3 +15,5 @@
 - [ ] Scope everything per user
 
 Add integration tests with stubs
+
+allow editing of tasks, dont instantly start them just in case

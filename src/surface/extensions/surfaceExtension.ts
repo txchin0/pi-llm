@@ -2,10 +2,8 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 
 import type { TaskQueue } from '../../queue/taskQueue.js';
 import type { AppLogger } from '../../logging/types.js';
-import { closeExaMcp } from '../exaMcpClient.js';
 import { registerFilesystemSandbox } from './filesystemSandbox.js';
 import { executeScheduleTask, scheduleTaskParameters } from './scheduleTaskTool.js';
-import { registerWebSearchTool } from './webSearchTool.js';
 
 export type SurfaceExtensionDependencies = {
   taskQueue: TaskQueue;
@@ -24,13 +22,12 @@ export function createSurfaceExtensionFactory(
   };
 }
 
-/** Registers surface tools and wires sandboxing and lifecycle hooks. */
+/** Registers core surface tools and wires sandboxing. */
 export function createSurfaceExtension(
   pi: ExtensionAPI,
   deps: SurfaceExtensionDependencies,
 ): void {
   registerFilesystemSandbox(pi);
-  registerWebSearchTool(pi);
 
   pi.registerTool({
     name: 'schedule_task',
@@ -47,9 +44,5 @@ export function createSurfaceExtension(
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       return executeScheduleTask(deps, params, ctx);
     },
-  });
-
-  pi.on('session_shutdown', async () => {
-    await closeExaMcp();
   });
 }

@@ -11,6 +11,10 @@ import type {
 } from '../config/surfaceAgent.js';
 import { validateSurfaceLlmEndpoint } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
+import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
+import { SURFACE_BASE_TOOLS } from '../integrations/baseTools.js';
+import { buildIntegrationSessionExtras } from '../integrations/buildIntegrationSessionExtras.js';
+import type { EnabledIntegration } from '../integrations/types.js';
 import type { AppLogger } from '../logging/types.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
 
@@ -33,6 +37,7 @@ export type CreateSurfaceSessionOptions = {
   surfaceAgentConfig: SurfaceAgentConfig;
   taskQueue: TaskQueue;
   contextTurnLimit: number;
+  enabledIntegrations: EnabledIntegration[];
   log?: AppLogger;
 };
 
@@ -71,13 +76,24 @@ export async function createSurfaceSession(
     retry: { enabled: true, maxRetries: 2 },
   });
 
+  const integrationExtras = buildIntegrationSessionExtras(
+    options.enabledIntegrations,
+    'surface',
+    {
+      userId: options.userId,
+      ...(options.log !== undefined ? { log: options.log } : {}),
+    },
+  );
+  assertToolAllowlistSync(SURFACE_BASE_TOOLS, integrationExtras.toolNames);
+
   const resourceLoader = await createSurfaceResourceLoader({
     cwd: options.userMemoryWorkspace,
     dataRoot: options.dataRoot,
-    systemPrompt: buildSurfaceSystemPrompt(),
+    systemPrompt: buildSurfaceSystemPrompt(integrationExtras.promptFragments),
     settingsManager,
     extensionFactories: [
       createSurfaceExtensionFactory(buildSurfaceExtensionDependencies(options)),
+      integrationExtras.extensionFactory,
     ],
   });
 
@@ -85,7 +101,7 @@ export async function createSurfaceSession(
     cwd: options.userMemoryWorkspace,
     model: options.model,
     thinkingLevel: options.surfaceAgentConfig.thinkingLevel,
-    tools: ['read', 'ls', 'grep', 'find', 'web_search', 'schedule_task'],
+    tools: [...SURFACE_BASE_TOOLS, ...integrationExtras.toolNames],
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
     resourceLoader,

@@ -1,6 +1,8 @@
+import { formatIntegrationGuidance } from '../integrations/formatIntegrationGuidance.js';
+
 /** Returns the stable system prompt for a worker agent session. */
-export function buildWorkerSystemPrompt(): string {
-  return [
+export function buildWorkerSystemPrompt(extraGuidance: readonly string[] = []): string {
+  const parts = [
     'You are a background worker agent that completes deferred tasks for the user.',
     'You have read and write filesystem tools (read, write, edit, ls, grep, find) scoped to the user memory workspace.',
     'Memory is organized as markdown topic files with an index file at the workspace root listing topics, titles, summaries, tags, and last-updated timestamps.',
@@ -9,5 +11,12 @@ export function buildWorkerSystemPrompt(): string {
     'When you create topics or change summaries, keep the index file accurate by editing or writing it directly.',
     'Complete the assigned task thoroughly using your tools.',
     'End your final response with a concise structured result summary describing what you did and the outcome.',
-  ].join('\n');
+  ];
+
+  const integrationGuidance = formatIntegrationGuidance(extraGuidance);
+  if (integrationGuidance.length > 0) {
+    parts.push(integrationGuidance);
+  }
+
+  return parts.join('\n');
 }

@@ -10,6 +10,8 @@ import type {
 } from '../config/surfaceAgent.js';
 import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
+import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
+import type { IntegrationStore } from '../integrations/store/integrationStore.js';
 import type { AppLogger } from '../logging/types.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
 import { createSurfaceSession } from './createSurfaceSession.js';
@@ -23,6 +25,7 @@ export type SurfaceSessionRegistryDependencies = {
   taskQueue: TaskQueue;
   contextTurnLimit: number;
   maxSessions: number;
+  integrationStore: IntegrationStore;
   log?: AppLogger;
 };
 
@@ -37,6 +40,7 @@ export class SurfaceSessionRegistry {
   private readonly taskQueue: TaskQueue;
   private readonly contextTurnLimit: number;
   private readonly maxSessions: number;
+  private readonly integrationStore: IntegrationStore;
   private readonly log: AppLogger | undefined;
 
   /** Creates a registry with shared model and auth dependencies. */
@@ -49,6 +53,7 @@ export class SurfaceSessionRegistry {
     this.taskQueue = dependencies.taskQueue;
     this.contextTurnLimit = dependencies.contextTurnLimit;
     this.maxSessions = dependencies.maxSessions;
+    this.integrationStore = dependencies.integrationStore;
     this.log = dependencies.log;
   }
 
@@ -62,6 +67,12 @@ export class SurfaceSessionRegistry {
 
     this.evictIfNeeded();
 
+    const enabledIntegrations = await resolveEnabledIntegrations(
+      this.integrationStore,
+      userId,
+      this.log ? { log: this.log } : {},
+    );
+
     const sessionOptions = {
       userId,
       sessionId,
@@ -73,6 +84,7 @@ export class SurfaceSessionRegistry {
       surfaceAgentConfig: this.surfaceAgentConfig,
       taskQueue: this.taskQueue,
       contextTurnLimit: this.contextTurnLimit,
+      enabledIntegrations,
     };
     const session = await createSurfaceSession(
       this.log ? { ...sessionOptions, log: this.log } : sessionOptions,

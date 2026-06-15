@@ -1,11 +1,16 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 
+import type { IntegrationContext } from '../types.js';
 import {
   callExaWebSearch,
   ExaMcpError,
   resolveExaApiKey,
-} from '../exaMcpClient.js';
+} from './exaMcpClient.js';
+
+export type WebSearchConfig = {
+  apiKey?: string;
+};
 
 const webSearchSchema = Type.Object({
   query: Type.String({ description: 'Search query for current web information' }),
@@ -18,8 +23,11 @@ const webSearchSchema = Type.Object({
   ),
 });
 
-/** Registers the surface `web_search` custom tool. */
-export function registerWebSearchTool(pi: ExtensionAPI): void {
+/** Registers the `web_search` custom tool using per-user config when present. */
+export function registerWebSearchTool(
+  pi: ExtensionAPI,
+  ctx: IntegrationContext<WebSearchConfig>,
+): void {
   pi.registerTool({
     name: 'web_search',
     label: 'web_search',
@@ -37,7 +45,7 @@ export function registerWebSearchTool(pi: ExtensionAPI): void {
           signal?: AbortSignal;
           apiKey?: string;
         } = {};
-        const apiKey = resolveExaApiKey();
+        const apiKey = ctx.config.apiKey ?? resolveExaApiKey();
         if (apiKey !== undefined) {
           searchOptions.apiKey = apiKey;
         }

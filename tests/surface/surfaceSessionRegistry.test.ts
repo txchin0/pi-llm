@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
+import { noopIntegrationStore } from '../../src/integrations/store/noopIntegrationStore.js';
 import { createMockTaskQueue } from '../helpers/mockTaskQueue.js';
 
 const createSurfaceSessionMock = vi.fn<
@@ -31,6 +32,7 @@ function createRegistry(maxSessions: number) {
     taskQueue: createMockTaskQueue(),
     contextTurnLimit: 3,
     maxSessions,
+    integrationStore: noopIntegrationStore,
   });
 }
 
