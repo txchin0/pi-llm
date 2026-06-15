@@ -19,3 +19,4 @@ Add integration tests with stubs
 allow editing of tasks, dont instantly start them just in case
 
 system prompt update - personality, better prompts for tools, skills etc. self learning
+git integrate user workspaces

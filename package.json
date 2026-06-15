@@ -14,7 +14,8 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "trace:prettify": "node ./node_modules/tsx/dist/cli.mjs scripts/prettify-worker-trace.mts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^0.79.0",
