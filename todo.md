@@ -6,7 +6,7 @@
 - [ ] Todo list
 
 ### Worker System
-- [ ] Add worker system (dequeue, idle detection, task execution)
+- [x] Add worker system (dequeue, idle detection, task execution)
 ### System Prompt
 - [x] Update system prompt (`schedule_task` guidance in `buildSurfaceSystemPrompt.ts`)
 ### Frontend Features
@@ -17,3 +17,5 @@
 Add integration tests with stubs
 
 allow editing of tasks, dont instantly start them just in case
+
+system prompt update - personality, better prompts for tools, skills etc. self learning

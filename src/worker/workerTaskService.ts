@@ -15,6 +15,7 @@ import { formatNowInTimezone } from '../surface/util/enrichUserMessage.js';
 
 import { buildWorkerTaskPrompt } from './buildWorkerTaskPrompt.js';
 import { createWorkerSession } from './createWorkerSession.js';
+import type { WorkerRunOutcome, WorkerRunTraceSink } from './workerRunTrace.js';
 
 export type WorkerTaskService = {
   runTask(task: TaskRecord, signal: AbortSignal): Promise<string>;
@@ -27,8 +28,13 @@ export type WorkerSessionFactory = (
 export type WorkerPromptRunner = (
   session: AgentSession,
   prompt: string,
-  options: { signal: AbortSignal; log?: AppLogger },
+  options: { signal: AbortSignal; log?: AppLogger; trace?: WorkerRunTraceSink },
 ) => Promise<string>;
+
+export type WorkerTraceFactory = (
+  task: TaskRecord,
+  startedAt: string,
+) => WorkerRunTraceSink;
 
 export type WorkerTaskServiceDependencies = {
   dataRoot: string;
@@ -41,6 +47,7 @@ export type WorkerTaskServiceDependencies = {
   now?: () => string;
   createSession?: WorkerSessionFactory;
   runPrompt?: WorkerPromptRunner;
+  createTrace?: WorkerTraceFactory;
 };
 
 /** Logs Pi tool execution events at info without payload bodies. */
@@ -72,6 +79,30 @@ function logToolEvent(log: AppLogger | undefined, event: AgentSessionEvent): voi
   }
 }
 
+/** Resolves the terminal worker trace outcome from success, error, or abort. */
+export function resolveWorkerRunOutcome(
+  error: unknown,
+  signal: AbortSignal,
+  summaryLength: number,
+): WorkerRunOutcome {
+  if (error === undefined) {
+    return { kind: 'completed', summaryLength };
+  }
+
+  if (signal.aborted) {
+    const reason: unknown = signal.reason;
+    if (reason instanceof Error && reason.message === 'Worker task timed out') {
+      return { kind: 'timeout' };
+    }
+
+    return { kind: 'aborted' };
+  }
+
+  const message =
+    error instanceof Error ? error.message : 'Worker task failed';
+  return { kind: 'error', message };
+}
+
 /**
  * Runs one worker prompt via the shared agent runner, accumulates assistant text,
  * and throws on terminal LLM errors or abort.
@@ -79,13 +110,14 @@ function logToolEvent(log: AppLogger | undefined, event: AgentSessionEvent): voi
 export async function runWorkerPrompt(
   session: AgentSession,
   message: string,
-  options: { signal: AbortSignal; log?: AppLogger },
+  options: { signal: AbortSignal; log?: AppLogger; trace?: WorkerRunTraceSink },
 ): Promise<string> {
   let summary = '';
 
   for await (const event of runAgentPrompt(session, message, {
     signal: options.signal,
   })) {
+    options.trace?.onEvent(event);
     logToolEvent(options.log, event);
 
     if (event.type === 'message_update') {
@@ -127,7 +159,9 @@ export function createWorkerTaskService(
       });
 
       const now = dependencies.now ?? (() => formatNowInTimezone());
-      const prompt = buildWorkerTaskPrompt(task, now());
+      const startedAt = now();
+      const prompt = buildWorkerTaskPrompt(task, startedAt);
+      const trace = dependencies.createTrace?.(task, startedAt);
       const userMemoryWorkspace = resolveUserMemoryWorkspace(
         dependencies.dataRoot,
         task.userId,
@@ -154,19 +188,37 @@ export function createWorkerTaskService(
         log ? { ...sessionOptions, log } : sessionOptions,
       );
 
-      const promptOptions = log === undefined ? { signal } : { signal, log };
+      const promptOptions = {
+        signal,
+        ...(log === undefined ? {} : { log }),
+        ...(trace === undefined ? {} : { trace }),
+      };
 
-      const summary = await runPrompt(session, prompt, promptOptions);
+      let summary = '';
+      let runError: unknown;
 
-      log?.info(
-        {
-          event: 'worker.agent.completed',
-          summary_length: summary.length,
-        },
-        'worker agent completed',
-      );
+      try {
+        summary = await runPrompt(session, prompt, promptOptions);
 
-      return summary;
+        log?.info(
+          {
+            event: 'worker.agent.completed',
+            summary_length: summary.length,
+          },
+          'worker agent completed',
+        );
+
+        return summary;
+      } catch (error) {
+        runError = error;
+        throw error;
+      } finally {
+        if (trace !== undefined) {
+          await trace.close(
+            resolveWorkerRunOutcome(runError, signal, summary.length),
+          );
+        }
+      }
     },
   };
 }

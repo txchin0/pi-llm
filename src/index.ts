@@ -25,6 +25,7 @@ import { createSurfaceRespondService } from './surface/surfaceRespondService.js'
 import { SurfaceSessionRegistry } from './surface/surfaceSessionRegistry.js';
 import { WorkerLoop } from './worker/workerLoop.js';
 import { createWorkerTaskService } from './worker/workerTaskService.js';
+import { createWorkerRunTraceSink } from './worker/workerRunTrace.js';
 
 /** Builds the Fastify app and listens on `env.PORT`. */
 export async function startServer(): Promise<void> {
@@ -82,6 +83,8 @@ export async function startServer(): Promise<void> {
       createChildLogger(logger, { component: 'worker' }),
     );
 
+    const workerLog = createChildLogger(logger, { component: 'worker' });
+
     const workerTaskService = createWorkerTaskService({
       dataRoot: env.DATA_ROOT,
       authStorage: workerLlm.authStorage,
@@ -89,7 +92,18 @@ export async function startServer(): Promise<void> {
       model: workerLlm.model,
       workerAgentConfig,
       integrationStore,
-      logger: createChildLogger(logger, { component: 'worker' }),
+      logger: workerLog,
+      ...(env.WORKER_RUN_TRACE
+        ? {
+            createTrace: (task, startedAt) =>
+              createWorkerRunTraceSink({
+                dataRoot: env.DATA_ROOT,
+                task,
+                startedAt,
+                log: workerLog,
+              }),
+          }
+        : {}),
     });
 
     workerLoop = new WorkerLoop({

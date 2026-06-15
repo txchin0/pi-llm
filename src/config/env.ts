@@ -131,6 +131,10 @@ export const env = {
     'WORKER_TASK_TIMEOUT_MS',
     120_000,
   ),
+  WORKER_RUN_TRACE: parseBoolean(
+    process.env.WORKER_RUN_TRACE,
+    nodeEnv === 'development',
+  ),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
   isProd: nodeEnv === 'production',

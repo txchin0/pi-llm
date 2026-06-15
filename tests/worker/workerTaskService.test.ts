@@ -7,7 +7,9 @@ import {
   createWorkerTaskService,
   type WorkerPromptRunner,
   type WorkerSessionFactory,
+  type WorkerTraceFactory,
 } from '../../src/worker/workerTaskService.js';
+import type { WorkerRunTraceSink } from '../../src/worker/workerRunTrace.js';
 
 describe('createWorkerTaskService', () => {
   it('builds a prompt with description, context turns, and current time', async () => {
@@ -93,6 +95,80 @@ describe('createWorkerTaskService', () => {
     await expect(
       service.runTask(task, new AbortController().signal),
     ).rejects.toThrow('agent down');
+  });
+
+  it('closes the trace sink in finally on success and failure', async () => {
+    const task: TaskRecord = {
+      id: 'task_test00000004',
+      userId: 'web-user',
+      description: 'trace task',
+      context: { turns: [] },
+      sessionId: null,
+      status: 'pending',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      retryCount: 0,
+      result: null,
+      errorMessage: null,
+    };
+
+    const outcomes: Array<{ kind: string }> = [];
+    const createTrace = vi.fn(
+      (): WorkerRunTraceSink => ({
+        onEvent() {},
+        close: (outcome) => {
+          outcomes.push(outcome);
+          return Promise.resolve();
+        },
+      }),
+    ) as WorkerTraceFactory;
+
+    const service = createWorkerTaskService({
+      dataRoot: './data',
+      authStorage: {} as never,
+      modelRegistry: {} as never,
+      model: {} as never,
+      workerAgentConfig: {} as never,
+      integrationStore: noopIntegrationStore,
+      now: () => '2026-01-01T12:00:00.000+11:00',
+      createSession: vi
+        .fn()
+        .mockResolvedValue({ prompt: vi.fn() }) as WorkerSessionFactory,
+      createTrace,
+      runPrompt: vi.fn().mockResolvedValue('done') as WorkerPromptRunner,
+    });
+
+    await service.runTask(task, new AbortController().signal);
+
+    expect(createTrace).toHaveBeenCalledWith(
+      task,
+      '2026-01-01T12:00:00.000+11:00',
+    );
+    expect(outcomes).toEqual([{ kind: 'completed', summaryLength: 4 }]);
+
+    const failingService = createWorkerTaskService({
+      dataRoot: './data',
+      authStorage: {} as never,
+      modelRegistry: {} as never,
+      model: {} as never,
+      workerAgentConfig: {} as never,
+      integrationStore: noopIntegrationStore,
+      now: () => '2026-01-01T12:00:00.000+11:00',
+      createSession: vi
+        .fn()
+        .mockResolvedValue({ prompt: vi.fn() }) as WorkerSessionFactory,
+      createTrace,
+      runPrompt: vi
+        .fn()
+        .mockRejectedValue(new Error('boom')) as WorkerPromptRunner,
+    });
+
+    outcomes.length = 0;
+
+    await expect(
+      failingService.runTask(task, new AbortController().signal),
+    ).rejects.toThrow('boom');
+    expect(outcomes).toEqual([{ kind: 'error', message: 'boom' }]);
   });
 });
 

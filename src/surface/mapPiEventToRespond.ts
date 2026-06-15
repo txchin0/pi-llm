@@ -1,10 +1,11 @@
 import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
-import { extractAssistantOutcome, findLastAssistantMessage } from '../agent/extractAssistantOutcome.js';
-import type {
-  ProviderFinishReason,
-  ProviderUsage,
-} from '../contracts/provider.js';
+import {
+  mapPiEventToAgentActivity,
+  type PiActivityMapperContext,
+  type PiEventMapperState,
+} from '../agent/mapPiEventToAgentActivity.js';
+import type { AgentActivityEvent } from '../contracts/agentActivity.js';
 import type {
   RequestId,
   RespondRequest,
@@ -12,25 +13,12 @@ import type {
   SessionId,
 } from '../contracts/respond.js';
 
-type ProviderStopReason =
-  | 'stop'
-  | 'length'
-  | 'toolUse'
-  | 'error'
-  | 'aborted';
-
-type AssistantUsageSlice = {
-  input: number;
-  output: number;
-  totalTokens: number;
-};
-
-type AssistantMessageSlice = {
-  role: 'assistant';
-  usage: AssistantUsageSlice;
-  stopReason: ProviderStopReason;
-  errorMessage?: string;
-};
+export {
+  createPiEventMapperState,
+  mapStopReason,
+  mapUsage,
+  type PiEventMapperState,
+} from '../agent/piEventMapperState.js';
 
 export type PiEventMapperContext = {
   requestId: RequestId;
@@ -39,54 +27,82 @@ export type PiEventMapperContext = {
   completedAt: () => string;
 };
 
-export type PiEventMapperState = {
-  step: number;
-  toolSteps: Map<string, number>;
-};
+/** Maps one activity event to zero or more SSE respond events. */
+function mapActivityToRespond(
+  activity: AgentActivityEvent,
+  context: PiEventMapperContext,
+): RespondSseEvent[] {
+  switch (activity.type) {
+    case 'text_delta':
+      return [{ type: 'delta', text: activity.text }];
+    case 'thinking_delta':
+      if (!context.showThinking) {
+        return [];
+      }
 
-/** Creates mutable mapper state for one respond request. */
-export function createPiEventMapperState(): PiEventMapperState {
-  return {
-    step: 0,
-    toolSteps: new Map(),
-  };
-}
-
-/** Maps Pi `StopReason` values to the respond contract finish reason. */
-export function mapStopReason(stopReason: ProviderStopReason): ProviderFinishReason {
-  switch (stopReason) {
-    case 'stop':
-      return 'stop';
-    case 'length':
-      return 'length';
-    case 'toolUse':
-      return 'tool-calls';
-    case 'error':
-    case 'aborted':
-      return 'error';
-    default:
-      return 'unknown';
+      return [{ type: 'thinking_delta', text: activity.text }];
+    case 'tool_call':
+      return [
+        {
+          type: 'tool_call',
+          request_id: context.requestId,
+          session_id: context.sessionId,
+          step: activity.step,
+          tool_call_id: activity.tool_call_id,
+          tool_name: activity.tool_name,
+          input: activity.input,
+        },
+      ];
+    case 'tool_result':
+      return [
+        {
+          type: 'tool_result',
+          request_id: context.requestId,
+          session_id: context.sessionId,
+          step: activity.step,
+          tool_call_id: activity.tool_call_id,
+          tool_name: activity.tool_name,
+          output: activity.output,
+          is_error: activity.is_error,
+          ...(activity.is_error
+            ? {
+                error_code: activity.error_code ?? 'tool_execution_failed',
+                error_message: activity.error_message ?? 'Tool execution failed',
+              }
+            : {}),
+        },
+      ];
+    case 'usage':
+      return [
+        {
+          type: 'usage',
+          request_id: context.requestId,
+          usage: activity.usage,
+        },
+      ];
+    case 'agent_error':
+      return [
+        {
+          type: 'error',
+          request_id: context.requestId,
+          code: 'llm_error',
+          message: activity.message,
+        },
+      ];
+    case 'agent_finished':
+      return [
+        {
+          type: 'final',
+          request_id: context.requestId,
+          finish_reason: activity.finish_reason,
+          completed_at: activity.completed_at,
+        },
+      ];
+    default: {
+      const _exhaustive: never = activity;
+      return _exhaustive;
+    }
   }
-}
-
-/** Maps Pi usage fields to the respond usage contract. */
-export function mapUsage(usage: AssistantUsageSlice): ProviderUsage {
-  return {
-    input_tokens: usage.input,
-    output_tokens: usage.output,
-    total_tokens: usage.totalTokens,
-  };
-}
-
-/** Returns true when a Pi message has assistant fields needed for SSE usage mapping. */
-function isAssistantMessageSlice(
-  message: { role: string },
-): message is AssistantMessageSlice {
-  return (
-    message.role === 'assistant' &&
-    'usage' in message &&
-    'stopReason' in message
-  );
 }
 
 /** Maps one Pi session event to zero or more SSE respond events. */
@@ -95,117 +111,13 @@ export function mapPiEventToRespond(
   state: PiEventMapperState,
   context: PiEventMapperContext,
 ): RespondSseEvent[] {
-  switch (event.type) {
-    case 'message_update': {
-      const assistantEvent = event.assistantMessageEvent;
-      if (assistantEvent.type === 'text_delta') {
-        return [{ type: 'delta', text: assistantEvent.delta }];
-      }
+  const activityContext: PiActivityMapperContext = {
+    completedAt: context.completedAt,
+  };
 
-      if (
-        assistantEvent.type === 'thinking_delta' &&
-        context.showThinking
-      ) {
-        return [{ type: 'thinking_delta', text: assistantEvent.delta }];
-      }
-
-      return [];
-    }
-    case 'tool_execution_start': {
-      state.step += 1;
-      state.toolSteps.set(event.toolCallId, state.step);
-
-      return [
-        {
-          type: 'tool_call',
-          request_id: context.requestId,
-          session_id: context.sessionId,
-          step: state.step,
-          tool_call_id: event.toolCallId,
-          tool_name: event.toolName,
-          input: event.args,
-        },
-      ];
-    }
-    case 'tool_execution_end': {
-      const step = state.toolSteps.get(event.toolCallId) ?? state.step;
-
-      if (event.isError) {
-        return [
-          {
-            type: 'tool_result',
-            request_id: context.requestId,
-            session_id: context.sessionId,
-            step,
-            tool_call_id: event.toolCallId,
-            tool_name: event.toolName,
-            output: event.result,
-            is_error: true,
-            error_code: 'tool_execution_failed',
-            error_message:
-              typeof event.result === 'string'
-                ? event.result
-                : 'Tool execution failed',
-          },
-        ];
-      }
-
-      return [
-        {
-          type: 'tool_result',
-          request_id: context.requestId,
-          session_id: context.sessionId,
-          step,
-          tool_call_id: event.toolCallId,
-          tool_name: event.toolName,
-          output: event.result,
-          is_error: false,
-        },
-      ];
-    }
-    case 'agent_end': {
-      const outcome = extractAssistantOutcome(event);
-      if (outcome.kind === 'retry') {
-        return [];
-      }
-
-      const assistantMessage = findLastAssistantMessage(
-        event.messages,
-        isAssistantMessageSlice,
-      );
-      const events: RespondSseEvent[] = [];
-
-      if (assistantMessage) {
-        events.push({
-          type: 'usage',
-          request_id: context.requestId,
-          usage: mapUsage(assistantMessage.usage),
-        });
-
-        if (outcome.kind === 'error') {
-          events.push({
-            type: 'error',
-            request_id: context.requestId,
-            code: 'llm_error',
-            message: outcome.message,
-          });
-        }
-      }
-
-      events.push({
-        type: 'final',
-        request_id: context.requestId,
-        finish_reason: assistantMessage
-          ? mapStopReason(assistantMessage.stopReason)
-          : 'unknown',
-        completed_at: context.completedAt(),
-      });
-
-      return events;
-    }
-    default:
-      return [];
-  }
+  return mapPiEventToAgentActivity(event, state, activityContext).flatMap(
+    (activity) => mapActivityToRespond(activity, context),
+  );
 }
 
 export type MapPiEventOptions = {
