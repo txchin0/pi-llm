@@ -1,8 +1,5 @@
-import { randomBytes } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-
 import type { IntegrationStore, UserIntegrationState } from './integrationStore.js';
+import { readJsonFile, writeJsonFileAtomic } from './jsonFileStore.js';
 import { resolveUserIntegrationsPath } from './resolveUserIntegrationsPath.js';
 
 export type FileIntegrationStoreOptions = {
@@ -43,20 +40,7 @@ export function createFileIntegrationStore(
 async function readIntegrationsFile(
   path: string,
 ): Promise<Record<string, UserIntegrationState>> {
-  try {
-    const raw = await readFile(path, 'utf8');
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      return {};
-    }
-
-    return parsed as Record<string, UserIntegrationState>;
-  } catch (error) {
-    if (isENOENT(error)) {
-      return {};
-    }
-    throw error;
-  }
+  return readJsonFile<Record<string, UserIntegrationState>>(path, {});
 }
 
 /** Writes integrations JSON atomically via temp file and rename. */
@@ -64,17 +48,5 @@ async function writeIntegrationsFile(
   path: string,
   data: Record<string, UserIntegrationState>,
 ): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const tempPath = `${path}.${randomBytes(8).toString('hex')}.tmp`;
-  await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
-  await rename(tempPath, path);
-}
-
-function isENOENT(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as NodeJS.ErrnoException).code === 'ENOENT'
-  );
+  await writeJsonFileAtomic(path, data);
 }

@@ -23,6 +23,8 @@
     "better-sqlite3": "^12.10.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
+    "google-auth-library": "^10.7.0",
+    "googleapis": "^173.0.0",
     "luxon": "^3.7.2",
     "pino": "^10.3.1",
     "typebox": "^1.1.38",

@@ -2,12 +2,14 @@ import type { ExtensionFactory } from '@earendil-works/pi-coding-agent';
 
 import type { AgentLlmRole } from '../config/agentLlm.js';
 import type { AppLogger } from '../logging/types.js';
+import type { OAuthService } from './oauth/oauthService.js';
 import type { EnabledIntegration, IntegrationContext } from './types.js';
 import { getIntegrationToolsForRole } from './types.js';
 
 export type BuildIntegrationSessionExtrasInput = {
   userId: string;
   log?: AppLogger;
+  oauthService: OAuthService;
 };
 
 export type IntegrationSessionExtras = {
@@ -47,6 +49,16 @@ export function buildIntegrationSessionExtras(
         config,
         ...(input.log !== undefined ? { log: input.log } : {}),
       };
+
+      if (definition.oauth !== undefined) {
+        const oauth = definition.oauth;
+        integrationCtx.getAccessToken = () =>
+          input.oauthService.getAccessToken(
+            input.userId,
+            oauth.providerId,
+            oauth.scopes[role] ?? [],
+          );
+      }
 
       const specs = getIntegrationToolsForRole(definition, role);
       for (const spec of specs) {

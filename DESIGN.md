@@ -470,6 +470,10 @@ Environment variables or Pi auth storage for LLM and search API keys. No secrets
 
 Authentication, encryption at rest, and network exposure controls when moving beyond local single-user use.
 
+### 14.5 OAuth Connect (MVP)
+
+OAuth start/status/disconnect accept `user_id` as a trusted query parameter (same model as tasks in §12.2). Anyone who can reach the server can link OAuth tokens to an arbitrary user id until authentication exists; then derive `userId` server-side and bind it into signed OAuth state. Callback state is stored in-memory (single-process only; restart mid-flow requires re-connecting).
+
 ---
 
 ## 15. MVP Scope

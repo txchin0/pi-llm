@@ -37,6 +37,12 @@ describe('createIntegrationService', () => {
         default_enabled: true,
         enabled: false,
       },
+      {
+        id: 'google_calendar',
+        label: 'Google Calendar',
+        default_enabled: false,
+        enabled: false,
+      },
     ]);
   });
 

@@ -11,6 +11,8 @@ import { noopTaskQueue } from '../queue/noopTaskQueue.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
 import { noopIntegrationStore } from '../integrations/store/noopIntegrationStore.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
+import { OAuthController } from '../integrations/oauth/oauthController.js';
+import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import { createIntegrationService } from '../integrations/integrationService.js';
 import { IntegrationsController } from '../integrations/integrationsController.js';
 import {
@@ -20,6 +22,7 @@ import {
 import { ListTasksController } from '../tasks/listTasksController.js';
 import { createTaskListService } from '../tasks/taskListService.js';
 import { registerIntegrationsRoute } from './routes/integrations.js';
+import { registerOAuthRoute } from './routes/oauth.js';
 import { registerRespondRoute } from './routes/respond.js';
 import { registerTasksRoute } from './routes/tasks.js';
 
@@ -27,6 +30,7 @@ export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
   taskQueue?: TaskQueue;
   integrationStore?: IntegrationStore;
+  oauthService?: OAuthService;
 };
 
 /** Creates a Fastify instance with respond, tasks, and integrations routes. */
@@ -35,6 +39,7 @@ export function buildServer(options: BuildServerOptions = {}) {
     logger = createRootLogger(),
     taskQueue = noopTaskQueue,
     integrationStore = noopIntegrationStore,
+    oauthService,
     ...controllerOptions
   } = options;
   const requestIdFactory =
@@ -82,6 +87,14 @@ export function buildServer(options: BuildServerOptions = {}) {
     logger,
   });
   registerIntegrationsRoute(app, { controller: integrationsController, logger });
+
+  if (oauthService !== undefined) {
+    const oauthController = new OAuthController({
+      service: oauthService,
+      logger,
+    });
+    registerOAuthRoute(app, { controller: oauthController, logger });
+  }
 
   return app;
 }

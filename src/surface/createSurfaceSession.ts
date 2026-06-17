@@ -14,6 +14,8 @@ import type { SessionId } from '../contracts/respond.js';
 import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
 import { SURFACE_BASE_TOOLS } from '../integrations/baseTools.js';
 import { buildIntegrationSessionExtras } from '../integrations/buildIntegrationSessionExtras.js';
+import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
+import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { EnabledIntegration } from '../integrations/types.js';
 import type { AppLogger } from '../logging/types.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
@@ -38,6 +40,7 @@ export type CreateSurfaceSessionOptions = {
   taskQueue: TaskQueue;
   contextTurnLimit: number;
   enabledIntegrations: EnabledIntegration[];
+  oauthService?: OAuthService;
   log?: AppLogger;
 };
 
@@ -81,6 +84,7 @@ export async function createSurfaceSession(
     'surface',
     {
       userId: options.userId,
+      oauthService: options.oauthService ?? noopOAuthService,
       ...(options.log !== undefined ? { log: options.log } : {}),
     },
   );

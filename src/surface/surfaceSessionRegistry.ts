@@ -11,6 +11,8 @@ import type {
 import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
+import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
+import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
 import type { AppLogger } from '../logging/types.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
@@ -26,6 +28,7 @@ export type SurfaceSessionRegistryDependencies = {
   contextTurnLimit: number;
   maxSessions: number;
   integrationStore: IntegrationStore;
+  oauthService?: OAuthService;
   log?: AppLogger;
 };
 
@@ -41,6 +44,7 @@ export class SurfaceSessionRegistry {
   private readonly contextTurnLimit: number;
   private readonly maxSessions: number;
   private readonly integrationStore: IntegrationStore;
+  private readonly oauthService: OAuthService;
   private readonly log: AppLogger | undefined;
 
   /** Creates a registry with shared model and auth dependencies. */
@@ -54,6 +58,7 @@ export class SurfaceSessionRegistry {
     this.contextTurnLimit = dependencies.contextTurnLimit;
     this.maxSessions = dependencies.maxSessions;
     this.integrationStore = dependencies.integrationStore;
+    this.oauthService = dependencies.oauthService ?? noopOAuthService;
     this.log = dependencies.log;
   }
 
@@ -85,6 +90,7 @@ export class SurfaceSessionRegistry {
       taskQueue: this.taskQueue,
       contextTurnLimit: this.contextTurnLimit,
       enabledIntegrations,
+      oauthService: this.oauthService,
     };
     const session = await createSurfaceSession(
       this.log ? { ...sessionOptions, log: this.log } : sessionOptions,

@@ -87,7 +87,7 @@ describe('runWorkerPrompt', () => {
       },
     ];
 
-    vi.mocked(runAgentPrompt).mockImplementation(function* () {
+    vi.mocked(runAgentPrompt).mockImplementation(async function* () {
       for (const event of events) {
         yield event;
       }
@@ -106,7 +106,7 @@ describe('runWorkerPrompt', () => {
     const session = { prompt: vi.fn() } as unknown as AgentSession;
     const trace = createMockTrace();
 
-    vi.mocked(runAgentPrompt).mockImplementation(function* () {
+    vi.mocked(runAgentPrompt).mockImplementation(async function* () {
       yield {
         type: 'agent_end',
         messages: [

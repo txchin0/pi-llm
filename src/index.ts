@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 
 import { env } from './config/env.js';
+import { parseGoogleOAuthConfig } from './config/googleOAuth.js';
 import {
   createSurfaceLlmRuntime,
   surfaceAgentConfig,
@@ -12,6 +13,10 @@ import {
   workerAgentConfig,
 } from './config/workerAgent.js';
 import { collectProcessShutdownHooks, validateRegistry } from './integrations/registry.js';
+import { createFileOAuthTokenStore } from './integrations/oauth/fileOAuthTokenStore.js';
+import { noopOAuthService } from './integrations/oauth/noopOAuthService.js';
+import { createOAuthService } from './integrations/oauth/oauthService.js';
+import { getOAuthProvider } from './integrations/oauth/oauthProviderRegistry.js';
 import { createFileIntegrationStore } from './integrations/store/fileIntegrationStore.js';
 import { createChildLogger, createRootLogger } from './logging/index.js';
 import { resolveMigrationsFolder } from './queue/resolveMigrationsFolder.js';
@@ -37,6 +42,17 @@ export async function startServer(): Promise<void> {
   await mkdir(env.DATA_ROOT, { recursive: true });
 
   const integrationStore = createFileIntegrationStore({ dataRoot: env.DATA_ROOT });
+
+  const googleOAuthConfig = parseGoogleOAuthConfig();
+  const oauthService =
+    googleOAuthConfig !== undefined
+      ? createOAuthService({
+          tokenStore: createFileOAuthTokenStore({ dataRoot: env.DATA_ROOT }),
+          integrationStore,
+          getOAuthProvider,
+          log: createChildLogger(logger, { component: 'oauth' }),
+        })
+      : noopOAuthService;
 
   const surfaceLlm = createSurfaceLlmRuntime(surfaceAgentConfig);
   await surfaceLlm.warnEndpoint(
@@ -70,11 +86,18 @@ export async function startServer(): Promise<void> {
     contextTurnLimit: env.TASK_CONTEXT_TURN_LIMIT,
     maxSessions: env.SURFACE_SESSION_CACHE_LIMIT,
     integrationStore,
+    oauthService,
     log: createChildLogger(logger, { component: 'surface' }),
   });
 
   const service = createSurfaceRespondService({ registry, logger });
-  const app = buildServer({ logger, service, taskQueue, integrationStore });
+  const app = buildServer({
+    logger,
+    service,
+    taskQueue,
+    integrationStore,
+    ...(googleOAuthConfig !== undefined ? { oauthService } : {}),
+  });
 
   let workerLoop: WorkerLoop | undefined;
   if (env.WORKER_ENABLED) {
@@ -92,6 +115,7 @@ export async function startServer(): Promise<void> {
       model: workerLlm.model,
       workerAgentConfig,
       integrationStore,
+      oauthService,
       logger: workerLog,
       ...(env.WORKER_RUN_TRACE
         ? {

@@ -51,6 +51,12 @@ describe('integrations routes', () => {
         default_enabled: true,
         enabled: true,
       },
+      {
+        id: 'google_calendar',
+        label: 'Google Calendar',
+        default_enabled: false,
+        enabled: false,
+      },
     ]);
 
     await app.close();

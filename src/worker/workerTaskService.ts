@@ -9,6 +9,8 @@ import type {
 } from '../config/workerAgent.js';
 import type { AppLogger } from '../logging/types.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
+import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
+import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
 import type { TaskRecord } from '../queue/taskTypes.js';
 import { formatNowInTimezone } from '../surface/util/enrichUserMessage.js';
@@ -43,6 +45,7 @@ export type WorkerTaskServiceDependencies = {
   model: WorkerModel;
   workerAgentConfig: WorkerAgentConfig;
   integrationStore: IntegrationStore;
+  oauthService?: OAuthService;
   logger?: AppLogger;
   now?: () => string;
   createSession?: WorkerSessionFactory;
@@ -148,6 +151,7 @@ export function createWorkerTaskService(
 ): WorkerTaskService {
   const createSession = dependencies.createSession ?? createWorkerSession;
   const runPrompt = dependencies.runPrompt ?? runWorkerPrompt;
+  const oauthService = dependencies.oauthService ?? noopOAuthService;
 
   return {
     async runTask(task, signal) {
@@ -182,6 +186,7 @@ export function createWorkerTaskService(
         modelRegistry: dependencies.modelRegistry,
         workerAgentConfig: dependencies.workerAgentConfig,
         enabledIntegrations,
+        oauthService,
       };
 
       const session = await createSession(

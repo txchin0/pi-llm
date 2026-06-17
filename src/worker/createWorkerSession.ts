@@ -12,6 +12,8 @@ import type {
 import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
 import { WORKER_BASE_TOOLS } from '../integrations/baseTools.js';
 import { buildIntegrationSessionExtras } from '../integrations/buildIntegrationSessionExtras.js';
+import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
+import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { EnabledIntegration } from '../integrations/types.js';
 import type { AppLogger } from '../logging/types.js';
 import { buildWorkerSystemPrompt } from './buildWorkerSystemPrompt.js';
@@ -28,6 +30,7 @@ export type CreateWorkerSessionOptions = {
   modelRegistry: ModelRegistry;
   workerAgentConfig: WorkerAgentConfig;
   enabledIntegrations: EnabledIntegration[];
+  oauthService?: OAuthService;
   log?: AppLogger;
 };
 
@@ -51,6 +54,7 @@ export async function createWorkerSession(
     'worker',
     {
       userId: options.userId,
+      oauthService: options.oauthService ?? noopOAuthService,
       ...(options.log !== undefined ? { log: options.log } : {}),
     },
   );
