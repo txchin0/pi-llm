@@ -122,4 +122,60 @@ describe('POST /v1/respond', () => {
 
     await app.close();
   });
+
+  it('streams start then provider_error when surface session creation fails', async () => {
+    const { buildServer } = await import('../../src/server/buildServer.js');
+    const { createSurfaceRespondService } = await import(
+      '../../src/surface/surfaceRespondService.js'
+    );
+    const providerError = 'Cannot reach Surface LLM at http://127.0.0.1:8080';
+
+    const app = buildServer({
+      service: createSurfaceRespondService({
+        registry: {
+          getOrCreate: () => Promise.reject(new Error(providerError)),
+        },
+      }),
+      now: () => '2026-06-09T12:00:00.000Z',
+      requestIdFactory: () => 'req_test00000001',
+      sessionIdFactory: () => 'sess_test00000001',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/respond',
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+      },
+      payload: {
+        user_id: 'web-user',
+        message: 'hello',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const events = parseSsePayload(response.body);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      event: 'start',
+      data: {
+        type: 'start',
+        request_id: 'req_test00000001',
+        session_id: 'sess_test00000001',
+      },
+    });
+    expect(events[1]).toMatchObject({
+      event: 'error',
+      data: {
+        type: 'error',
+        request_id: 'req_test00000001',
+        code: 'provider_error',
+        message: providerError,
+      },
+    });
+
+    await app.close();
+  });
 });

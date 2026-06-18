@@ -1,11 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import type {
-  RequestId,
-  RespondErrorEvent,
-  RespondSseEvent,
-  SessionId,
-} from '../contracts/respond.js';
+import type { RequestId, RespondSseEvent, SessionId } from '../contracts/respond.js';
 import { RespondRequestSchema } from '../contracts/respond.js';
 import {
   createChildLogger,
@@ -15,6 +10,10 @@ import {
 } from '../logging/index.js';
 import { noopRespondService } from './noopRespondService.js';
 import type { RespondService } from './respondService.js';
+import {
+  toRespondErrorEvent,
+  toValidationErrorEvent,
+} from './toRespondErrorEvent.js';
 
 export type RespondControllerDependencies = {
   service?: RespondService;
@@ -32,17 +31,6 @@ function defaultRequestIdFactory(): RequestId {
 /** Generates a `sess_`-prefixed session id for first-turn requests. */
 function defaultSessionIdFactory(): SessionId {
   return `sess_${randomBytes(8).toString('hex')}`;
-}
-
-/** Builds the SSE error event returned when request validation fails. */
-function toValidationErrorEvent(requestId: RequestId): RespondErrorEvent {
-  return {
-    type: 'error',
-    request_id: requestId,
-    code: 'validation_error',
-    message:
-      'Request body must include user_id, message, and an optional server-issued session_id.',
-  };
 }
 
 type HandleRequestOptions = {
@@ -123,11 +111,29 @@ export class RespondController {
       started_at: startedAt,
     };
 
-    yield* this.service.handleTurn(request, {
-      requestId,
-      sessionId,
-      startedAt,
-      logger: requestLog,
-    });
+    try {
+      yield* this.service.handleTurn(request, {
+        requestId,
+        sessionId,
+        startedAt,
+        logger: requestLog,
+      });
+    } catch (error) {
+      requestLog.error(
+        {
+          event: 'respond.service.failed',
+          err: error,
+        },
+        'respond service threw unexpectedly',
+      );
+
+      yield toRespondErrorEvent(
+        requestId,
+        'internal_error',
+        error instanceof Error
+          ? error.message
+          : 'Respond service failed unexpectedly.',
+      );
+    }
   }
 }

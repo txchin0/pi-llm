@@ -16,7 +16,13 @@ export type RespondContext = {
 
 /** Executes one validated respond turn and streams SSE events after `start`. */
 export interface RespondService {
-  /** Runs the request and streams any follow-up SSE events. */
+  /**
+   * Runs the request and streams any follow-up SSE events.
+   *
+   * Implementations must yield terminal `error` events for expected failures.
+   * Unexpected throws after `start` are converted to `internal_error` by the
+   * controller.
+   */
   handleTurn(
     request: RespondRequest,
     context: RespondContext,

@@ -49,6 +49,12 @@ function createRegistry(session: AgentSession): SurfaceSessionRegistry {
   } as unknown as SurfaceSessionRegistry;
 }
 
+function createRejectingRegistry(message: string): SurfaceSessionRegistry {
+  return {
+    getOrCreate: vi.fn(() => Promise.reject(new Error(message))),
+  } as unknown as SurfaceSessionRegistry;
+}
+
 describe('createSurfaceRespondService', () => {
   it('returns session_busy when the session is already streaming', async () => {
     const service = createSurfaceRespondService({
@@ -88,6 +94,30 @@ describe('createSurfaceRespondService', () => {
       expect.objectContaining({ isStreaming: false }),
       '[Current time: 2026-06-09T12:00:00.000Z]\n\nhello',
     );
+  });
+
+  it('maps getOrCreate failures to provider_error', async () => {
+    vi.mocked(runAgentPrompt).mockClear();
+
+    const service = createSurfaceRespondService({
+      registry: createRejectingRegistry(
+        'Cannot reach Surface LLM at http://127.0.0.1:8080',
+      ),
+    });
+    const events = await collectEvents(service, {
+      user_id: 'web-user',
+      message: 'hello',
+    });
+
+    expect(events).toEqual([
+      {
+        type: 'error',
+        request_id: context.requestId,
+        code: 'provider_error',
+        message: 'Cannot reach Surface LLM at http://127.0.0.1:8080',
+      },
+    ]);
+    expect(runAgentPrompt).not.toHaveBeenCalled();
   });
 
   it('maps prompt failures to agent_error', async () => {

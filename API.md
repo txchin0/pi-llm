@@ -238,7 +238,10 @@ Known error codes from the reference server:
 | `validation_error` | Invalid request body |
 | `session_not_found` | Unknown `session_id` |
 | `session_user_mismatch` | `session_id` belongs to a different `user_id` |
-| `provider_error` | LLM / provider failure |
+| `session_busy` | Surface session is already processing a request |
+| `provider_error` | LLM / provider failure (including surface session creation) |
+| `agent_error` | Surface agent prompt failure |
+| `internal_error` | Unexpected service throw after `start` |
 
 ---
 
