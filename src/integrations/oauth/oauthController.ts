@@ -1,14 +1,20 @@
 import {
+  buildOAuthConnectedRedirectUrl,
   OAuthCallbackQuerySchema,
   OAuthProviderIdParamSchema,
   OAuthStartQuerySchema,
   OAuthUserQuerySchema,
   toOAuthStatusResponse,
+  type OAuthCallbackErrorCode,
   type OAuthStatusResponse,
 } from '../../contracts/oauth.js';
 import { createChildLogger, createRootLogger, type AppLogger } from '../../logging/index.js';
 import { isKnownOAuthProvider } from './oauthProviderRegistry.js';
 import type { OAuthService } from './oauthService.js';
+import {
+  OAuthProviderMismatchError,
+  OAuthProviderNotConfiguredError,
+} from './oauthService.js';
 import { OAuthStateError } from './oauthStateStore.js';
 
 export type OAuthControllerDependencies = {
@@ -41,23 +47,9 @@ export type OAuthProviderNotConfiguredFailure = {
   };
 };
 
-export type OAuthCallbackFailure = {
-  status: 400;
-  body: {
-    code: 'invalid_callback';
-    message: string;
-  };
-};
-
 export type OAuthStartRedirect = {
   status: 302;
   location: string;
-};
-
-export type OAuthCallbackSuccess = {
-  status: 200;
-  body: string;
-  contentType: 'text/plain';
 };
 
 export type OAuthStatusSuccess = {
@@ -76,11 +68,7 @@ export type OAuthStartResult =
   | OAuthNotFoundFailure
   | OAuthProviderNotConfiguredFailure;
 
-export type OAuthCallbackResult =
-  | OAuthCallbackSuccess
-  | OAuthValidationFailure
-  | OAuthNotFoundFailure
-  | OAuthCallbackFailure;
+export type OAuthCallbackResult = OAuthStartRedirect;
 
 export type OAuthStatusResult =
   | OAuthStatusSuccess
@@ -94,6 +82,10 @@ export type OAuthDisconnectResult =
 
 type HandleOptions = {
   logger?: AppLogger;
+};
+
+type KnownProviderGuardOptions = {
+  onUnknown: 'json404' | 'connectedRedirect';
 };
 
 /** Validates OAuth HTTP requests and delegates to the OAuth service. */
@@ -139,7 +131,9 @@ export class OAuthController {
     const { providerId } = paramsValidation.data;
     const { userId } = queryValidation.data;
 
-    const providerFailure = assertKnownProvider(log, providerId, 'oauth.start');
+    const providerFailure = assertKnownProvider(log, providerId, 'oauth.start', {
+      onUnknown: 'json404',
+    });
     if (providerFailure !== undefined) {
       return providerFailure;
     }
@@ -175,7 +169,8 @@ export class OAuthController {
   }
 
   /**
-   * Validates callback params/query, exchanges the authorization code, and confirms success.
+   * Validates callback params/query, exchanges the authorization code, and redirects
+   * the browser to the frontend connected landing page.
    *
    * MVP trust model: the user id is recovered from in-memory OAuth state created at start,
    * not from the callback query. State is single-process only (lost on restart).
@@ -189,24 +184,34 @@ export class OAuthController {
       component: 'oauth.controller',
     });
 
-    const paramsValidation = OAuthProviderIdParamSchema.safeParse(rawParams);
-    if (!paramsValidation.success) {
-      return validationFailure(log, 'oauth.callback.validation_failed', 'Invalid provider id.');
-    }
+    const providerId = parseProviderIdBestEffort(rawParams);
 
     const queryValidation = OAuthCallbackQuerySchema.safeParse(rawQuery);
     if (!queryValidation.success) {
-      return validationFailure(
-        log,
-        'oauth.callback.validation_failed',
-        'Query must include code and state.',
+      log.warn(
+        { event: 'oauth.callback.validation_failed', provider_id: providerId },
+        'OAuth callback query validation failed',
       );
+      return oauthConnectedRedirect(providerId, 'invalid_callback');
     }
 
-    const { providerId } = paramsValidation.data;
-    const { code, state } = queryValidation.data;
+    const query = queryValidation.data;
 
-    const providerFailure = assertKnownProvider(log, providerId, 'oauth.callback');
+    if (query.kind === 'error') {
+      log.warn(
+        {
+          event: 'oauth.callback.provider_error',
+          provider_id: providerId,
+          provider_error: query.error,
+        },
+        'OAuth provider returned an error on callback',
+      );
+      return oauthConnectedRedirect(providerId, mapCallbackQueryError(query.error));
+    }
+
+    const providerFailure = assertKnownProvider(log, providerId, 'oauth.callback', {
+      onUnknown: 'connectedRedirect',
+    });
     if (providerFailure !== undefined) {
       return providerFailure;
     }
@@ -216,7 +221,11 @@ export class OAuthController {
     });
 
     try {
-      const { userId } = await this.service.handleCallback(providerId, code, state);
+      const { userId } = await this.service.handleCallback(
+        providerId,
+        query.code,
+        query.state,
+      );
 
       requestLog.info(
         {
@@ -227,12 +236,10 @@ export class OAuthController {
         'OAuth callback succeeded',
       );
 
-      return {
-        status: 200,
-        contentType: 'text/plain',
-        body: 'OAuth connected. You can close this tab.',
-      };
+      return oauthConnectedRedirect(providerId);
     } catch (error) {
+      const errorCode = mapCallbackServiceError(error);
+
       if (error instanceof OAuthStateError) {
         requestLog.warn(
           {
@@ -242,34 +249,19 @@ export class OAuthController {
           },
           'OAuth callback state invalid',
         );
-        return {
-          status: 400,
-          body: {
-            code: 'invalid_callback',
-            message:
-              error.code === 'expired'
-                ? 'OAuth state expired. Start the connect flow again.'
-                : 'OAuth state is invalid. Start the connect flow again.',
+      } else {
+        requestLog.warn(
+          {
+            event: 'oauth.callback.failed',
+            provider_id: providerId,
+            error_code: errorCode,
+            err: error instanceof Error ? error.message : 'callback failed',
           },
-        };
+          'OAuth callback failed',
+        );
       }
 
-      requestLog.warn(
-        {
-          event: 'oauth.callback.failed',
-          provider_id: providerId,
-          err: error instanceof Error ? error.message : 'callback failed',
-        },
-        'OAuth callback failed',
-      );
-
-      return {
-        status: 400,
-        body: {
-          code: 'invalid_callback',
-          message: 'OAuth callback failed. Start the connect flow again.',
-        },
-      };
+      return oauthConnectedRedirect(providerId, errorCode);
     }
   }
 
@@ -300,7 +292,9 @@ export class OAuthController {
     const { providerId } = paramsValidation.data;
     const { userId } = queryValidation.data;
 
-    const providerFailure = assertKnownProvider(log, providerId, 'oauth.status');
+    const providerFailure = assertKnownProvider(log, providerId, 'oauth.status', {
+      onUnknown: 'json404',
+    });
     if (providerFailure !== undefined) {
       return providerFailure;
     }
@@ -357,7 +351,9 @@ export class OAuthController {
     const { providerId } = paramsValidation.data;
     const { userId } = queryValidation.data;
 
-    const providerFailure = assertKnownProvider(log, providerId, 'oauth.disconnect');
+    const providerFailure = assertKnownProvider(log, providerId, 'oauth.disconnect', {
+      onUnknown: 'json404',
+    });
     if (providerFailure !== undefined) {
       return providerFailure;
     }
@@ -378,12 +374,29 @@ export class OAuthController {
   }
 }
 
-/** Returns a 404 result when the provider id is not supported. */
+/** Returns a 404 when the provider id is not supported (JSON API routes). */
 function assertKnownProvider(
   log: AppLogger,
   providerId: string,
   eventPrefix: string,
-): OAuthNotFoundFailure | undefined {
+  options: { onUnknown: 'json404' },
+): OAuthNotFoundFailure | undefined;
+
+/** Returns a connected-page redirect when the provider id is not supported (callback). */
+function assertKnownProvider(
+  log: AppLogger,
+  providerId: string,
+  eventPrefix: string,
+  options: { onUnknown: 'connectedRedirect' },
+): OAuthStartRedirect | undefined;
+
+/** Returns a redirect or 404 when the provider id is not supported. */
+function assertKnownProvider(
+  log: AppLogger,
+  providerId: string,
+  eventPrefix: string,
+  options: KnownProviderGuardOptions,
+): OAuthNotFoundFailure | OAuthStartRedirect | undefined {
   if (isKnownOAuthProvider(providerId)) {
     return undefined;
   }
@@ -393,6 +406,10 @@ function assertKnownProvider(
     'OAuth provider not found',
   );
 
+  if (options.onUnknown === 'connectedRedirect') {
+    return oauthConnectedRedirect(providerId, 'provider_not_found');
+  }
+
   return {
     status: 404,
     body: {
@@ -400,6 +417,50 @@ function assertKnownProvider(
       message: `Unknown OAuth provider: ${providerId}`,
     },
   };
+}
+
+/** Builds a 302 redirect to the frontend OAuth connected landing page. */
+function oauthConnectedRedirect(
+  providerId: string,
+  error?: OAuthCallbackErrorCode,
+): OAuthStartRedirect {
+  return { status: 302, location: buildOAuthConnectedRedirectUrl(providerId, error) };
+}
+
+/** Parses provider id from route params, falling back to `unknown` when invalid. */
+function parseProviderIdBestEffort(rawParams: unknown): string {
+  const parsed = OAuthProviderIdParamSchema.safeParse(rawParams);
+  if (parsed.success) {
+    return parsed.data.providerId;
+  }
+
+  return 'unknown';
+}
+
+/** Maps provider callback query errors to shared frontend error codes. */
+function mapCallbackQueryError(error: string): OAuthCallbackErrorCode {
+  if (error === 'access_denied') {
+    return 'access_denied';
+  }
+
+  return 'invalid_callback';
+}
+
+/** Maps service callback failures to shared frontend error codes. */
+function mapCallbackServiceError(error: unknown): OAuthCallbackErrorCode {
+  if (error instanceof OAuthStateError) {
+    return 'invalid_state';
+  }
+
+  if (error instanceof OAuthProviderMismatchError) {
+    return 'invalid_state';
+  }
+
+  if (error instanceof OAuthProviderNotConfiguredError) {
+    return 'provider_not_configured';
+  }
+
+  return 'token_exchange_failed';
 }
 
 /** Logs a validation failure and returns the standard 400 response shape. */

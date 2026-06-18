@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { OAuthStatusResponseSchema } from '../../src/contracts/oauth.js';
+import {
+  buildOAuthConnectedRedirectUrl,
+  OAuthStatusResponseSchema,
+} from '../../src/contracts/oauth.js';
+import {
+  OAuthProviderMismatchError,
+  OAuthProviderNotConfiguredError,
+} from '../../src/integrations/oauth/oauthService.js';
 import { OAuthStateError } from '../../src/integrations/oauth/oauthStateStore.js';
 import type { OAuthService } from '../../src/integrations/oauth/oauthService.js';
 
@@ -30,6 +37,20 @@ function createStubOAuthService(overrides: Partial<OAuthService> = {}): OAuthSer
     ...overrides,
   };
 }
+
+describe('buildOAuthConnectedRedirectUrl', () => {
+  it('builds a success redirect without an error param', () => {
+    expect(buildOAuthConnectedRedirectUrl('google')).toBe(
+      '/oauth/connected?provider=google',
+    );
+  });
+
+  it('builds a failure redirect with an encoded error param', () => {
+    expect(buildOAuthConnectedRedirectUrl('google', 'invalid_state')).toBe(
+      '/oauth/connected?provider=google&error=invalid_state',
+    );
+  });
+});
 
 describe('oauth routes', () => {
   async function createApp(oauthService: OAuthService) {
@@ -93,7 +114,7 @@ describe('oauth routes', () => {
     await app.close();
   });
 
-  it('GET /v1/oauth/:providerId/callback returns 200 on success', async () => {
+  it('GET /v1/oauth/:providerId/callback redirects to the connected page on success', async () => {
     const handleCallback = vi.fn(() => Promise.resolve({ userId: 'web-user' }));
     const oauthService = createStubOAuthService({ handleCallback });
     const app = await createApp(oauthService);
@@ -104,9 +125,8 @@ describe('oauth routes', () => {
       query: { code: 'auth-code', state: 'opaque-state' },
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.headers['content-type']).toContain('text/plain');
-    expect(response.body).toBe('OAuth connected. You can close this tab.');
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe('/oauth/connected?provider=google');
     expect(handleCallback).toHaveBeenCalledWith(
       'google',
       'auth-code',
@@ -116,7 +136,35 @@ describe('oauth routes', () => {
     await app.close();
   });
 
-  it('GET /v1/oauth/:providerId/callback returns 400 for invalid state', async () => {
+  it('GET /v1/oauth/:providerId/callback ignores extra provider query params', async () => {
+    const handleCallback = vi.fn(() => Promise.resolve({ userId: 'web-user' }));
+    const oauthService = createStubOAuthService({ handleCallback });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/callback',
+      query: {
+        code: '4/0AdkVLPxTJaO41OPEl2sMMd_CDZO4I6x-2v08NQ1TQVymC1IXDthOpzCPVXkidmtocRk1sw',
+        state: 'brrCW2GBwhnh25F_miIUYLwLFopNH85Qbq0K5HPIiDA',
+        iss: 'https://accounts.google.com',
+        scope:
+          'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
+      },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe('/oauth/connected?provider=google');
+    expect(handleCallback).toHaveBeenCalledWith(
+      'google',
+      '4/0AdkVLPxTJaO41OPEl2sMMd_CDZO4I6x-2v08NQ1TQVymC1IXDthOpzCPVXkidmtocRk1sw',
+      'brrCW2GBwhnh25F_miIUYLwLFopNH85Qbq0K5HPIiDA',
+    );
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with invalid_state for invalid state', async () => {
     const oauthService = createStubOAuthService({
       handleCallback: vi.fn(() => {
         throw new OAuthStateError('unknown');
@@ -130,10 +178,136 @@ describe('oauth routes', () => {
       query: { code: 'auth-code', state: 'bad-state' },
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({
-      code: 'invalid_callback',
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=google&error=invalid_state',
+    );
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with access_denied without calling the service', async () => {
+    const handleCallback = vi.fn();
+    const oauthService = createStubOAuthService({ handleCallback });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/callback',
+      query: { error: 'access_denied', state: 'opaque-state' },
     });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=google&error=access_denied',
+    );
+    expect(handleCallback).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with provider_not_found for unknown provider', async () => {
+    const handleCallback = vi.fn();
+    const oauthService = createStubOAuthService({ handleCallback });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/unknown/callback',
+      query: { code: 'auth-code', state: 'opaque-state' },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=unknown&error=provider_not_found',
+    );
+    expect(handleCallback).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with token_exchange_failed on exchange failure', async () => {
+    const oauthService = createStubOAuthService({
+      handleCallback: vi.fn(() => {
+        throw new Error('token exchange failed');
+      }),
+    });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/callback',
+      query: { code: 'auth-code', state: 'opaque-state' },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=google&error=token_exchange_failed',
+    );
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with invalid_callback for malformed query', async () => {
+    const handleCallback = vi.fn();
+    const oauthService = createStubOAuthService({ handleCallback });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/callback',
+      query: { code: 'auth-code' },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=google&error=invalid_callback',
+    );
+    expect(handleCallback).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with invalid_state for provider mismatch', async () => {
+    const oauthService = createStubOAuthService({
+      handleCallback: vi.fn(() => {
+        throw new OAuthProviderMismatchError('google', 'other');
+      }),
+    });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/callback',
+      query: { code: 'auth-code', state: 'opaque-state' },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=google&error=invalid_state',
+    );
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/callback redirects with provider_not_configured when provider is missing at callback', async () => {
+    const oauthService = createStubOAuthService({
+      handleCallback: vi.fn(() => {
+        throw new OAuthProviderNotConfiguredError('google');
+      }),
+    });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/callback',
+      query: { code: 'auth-code', state: 'opaque-state' },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      '/oauth/connected?provider=google&error=provider_not_configured',
+    );
 
     await app.close();
   });
@@ -186,7 +360,7 @@ describe('oauth routes', () => {
     await app.close();
   });
 
-  it('returns 404 for an unknown provider id', async () => {
+  it('returns 404 for an unknown provider id on start', async () => {
     const start = vi.fn();
     const oauthService = createStubOAuthService({ start });
     const app = await createApp(oauthService);

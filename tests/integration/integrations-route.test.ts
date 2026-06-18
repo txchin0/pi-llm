@@ -56,6 +56,7 @@ describe('integrations routes', () => {
         label: 'Google Calendar',
         default_enabled: false,
         enabled: false,
+        oauth: { provider_id: 'google' },
       },
     ]);
 

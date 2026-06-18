@@ -8,6 +8,11 @@ type RegisterOAuthRouteOptions = {
   logger: AppLogger;
 };
 
+/** Sends an HTTP redirect response with the given location header. */
+function sendRedirect(reply: FastifyReply, location: string): void {
+  reply.status(302).header('location', location).send();
+}
+
 /**
  * Registers generic OAuth connect routes under `/v1/oauth/:providerId`.
  *
@@ -39,7 +44,7 @@ export function registerOAuthRoute(
         });
 
         if (result.status === 302) {
-          reply.status(result.status).header('location', result.location).send();
+          sendRedirect(reply, result.location);
           return;
         }
 
@@ -95,19 +100,7 @@ export function registerOAuthRoute(
           { logger: log },
         );
 
-        if (result.status === 200 && 'contentType' in result) {
-          reply
-            .status(result.status)
-            .header('cache-control', 'no-store')
-            .type(result.contentType)
-            .send(result.body);
-          return;
-        }
-
-        reply
-          .status(result.status)
-          .header('cache-control', 'no-store')
-          .send(result.body);
+        sendRedirect(reply, result.location);
       } catch (error) {
         requestError = error;
         log.error(

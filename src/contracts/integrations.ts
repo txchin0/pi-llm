@@ -16,12 +16,19 @@ export const ListIntegrationsQuerySchema = z
 
 export type ParsedListIntegrationsQuery = z.infer<typeof ListIntegrationsQuerySchema>;
 
+export const IntegrationOAuthSummarySchema = z
+  .object({
+    provider_id: z.string(),
+  })
+  .strict();
+
 export const IntegrationSummarySchema = z
   .object({
     id: z.string(),
     label: z.string(),
     default_enabled: z.boolean(),
     enabled: z.boolean(),
+    oauth: IntegrationOAuthSummarySchema.optional(),
   })
   .strict();
 
@@ -64,5 +71,8 @@ export function toIntegrationSummary(
     label: definition.label,
     default_enabled: definition.defaultEnabled,
     enabled: effectiveEnabled(definition, storedState),
+    ...(definition.oauth !== undefined
+      ? { oauth: { provider_id: definition.oauth.providerId } }
+      : {}),
   });
 }

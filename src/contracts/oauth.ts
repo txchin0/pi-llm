@@ -25,16 +25,66 @@ export const OAuthStartQuerySchema = z
 
 export type ParsedOAuthStartQuery = z.infer<typeof OAuthStartQuerySchema>;
 
+/** Error codes echoed on `/oauth/connected` failure redirects (shared with ts-llm-frontend). */
+export type OAuthCallbackErrorCode =
+  | 'provider_not_configured'
+  | 'provider_not_found'
+  | 'invalid_state'
+  | 'token_exchange_failed'
+  | 'access_denied'
+  | 'invalid_callback';
+
+/** Builds the frontend OAuth connected landing page path for success or failure redirects. */
+export function buildOAuthConnectedRedirectUrl(
+  providerId: string,
+  error?: OAuthCallbackErrorCode,
+): string {
+  const params = new URLSearchParams({ provider: providerId });
+  if (error !== undefined) {
+    params.set('error', error);
+  }
+  return `/oauth/connected?${params.toString()}`;
+}
+
+/**
+ * Google and other providers append extra query params (e.g. iss, scope); ignore them.
+ * Accepts either a success callback (`code` + `state`) or a provider error (`error`).
+ */
 export const OAuthCallbackQuerySchema = z
   .object({
-    code: z.string().trim().min(1),
-    state: z.string().trim().min(1),
+    code: z.string().trim().min(1).optional(),
+    state: z.string().trim().min(1).optional(),
+    error: z.string().trim().min(1).optional(),
   })
-  .strict()
-  .transform((query) => ({
-    code: query.code,
-    state: query.state,
-  }));
+  .superRefine((query, ctx) => {
+    if (query.error !== undefined) {
+      return;
+    }
+
+    if (query.code !== undefined && query.state !== undefined) {
+      return;
+    }
+
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Query must include code and state, or an error.',
+    });
+  })
+  .transform((query) => {
+    if (query.error !== undefined) {
+      return {
+        kind: 'error' as const,
+        error: query.error,
+        state: query.state,
+      };
+    }
+
+    return {
+      kind: 'success' as const,
+      code: query.code!,
+      state: query.state!,
+    };
+  });
 
 export type ParsedOAuthCallbackQuery = z.infer<typeof OAuthCallbackQuerySchema>;
 

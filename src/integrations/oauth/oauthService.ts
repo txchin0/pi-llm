@@ -20,6 +20,34 @@ export type OAuthNotConnectedReason =
   | 'missing_scopes'
   | 'refresh_failed';
 
+/** Thrown when callback route provider id does not match the stored OAuth state entry. */
+export class OAuthProviderMismatchError extends Error {
+  readonly providerId: string;
+  readonly expectedProviderId: string;
+
+  /** Carries the route param and the provider id bound into OAuth state at start. */
+  constructor(providerId: string, expectedProviderId: string) {
+    super(
+      `OAuth callback provider mismatch: expected ${expectedProviderId}, got ${providerId}`,
+    );
+    this.name = 'OAuthProviderMismatchError';
+    this.providerId = providerId;
+    this.expectedProviderId = expectedProviderId;
+  }
+}
+
+/** Thrown when a known provider id has no configured OAuth provider at callback time. */
+export class OAuthProviderNotConfiguredError extends Error {
+  readonly providerId: string;
+
+  /** Identifies the provider that was not configured when the callback ran. */
+  constructor(providerId: string) {
+    super(`OAuth provider not configured: ${providerId}`);
+    this.name = 'OAuthProviderNotConfiguredError';
+    this.providerId = providerId;
+  }
+}
+
 /** Thrown when OAuth tokens are missing, insufficient, or cannot be refreshed. */
 export class OAuthNotConnectedError extends Error {
   readonly providerId: string;
@@ -155,12 +183,12 @@ export function createOAuthService(
     async handleCallback(providerId, code, state) {
       const entry = stateStore.consume(state);
       if (entry.providerId !== providerId) {
-        throw new Error('OAuth callback provider mismatch');
+        throw new OAuthProviderMismatchError(providerId, entry.providerId);
       }
 
       const provider = getOAuthProvider(providerId);
       if (provider === undefined) {
-        throw new Error(`OAuth provider not configured: ${providerId}`);
+        throw new OAuthProviderNotConfiguredError(providerId);
       }
 
       const tokens = await provider.exchangeCode({
