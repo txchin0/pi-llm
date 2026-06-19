@@ -2,7 +2,7 @@
 ### Tool Extensions
 - [x] Web search
 - [x] Queue (`schedule_task` + SQLite persistence)
-- [ ] Calendar
+- [x] Calendar
 - [ ] Todo list
 
 ### Worker System
@@ -13,7 +13,9 @@
 - [ ] Toggle for thinking indicator
 ### User Scope
 - [ ] Scope everything per user
-
+- [ ] Add user auth
+- [ ] Proper user sandboxing
+ 
 Add integration tests with stubs
 
 allow editing of tasks, dont instantly start them just in case
