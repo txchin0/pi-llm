@@ -4,11 +4,11 @@ import type {
   ModelRegistry,
 } from '@earendil-works/pi-coding-agent';
 
+import { resolveUserMemoryWorkspace } from '../config/agentLlm.js';
 import type {
   SurfaceAgentConfig,
   SurfaceModel,
 } from '../config/surfaceAgent.js';
-import { resolveUserMemoryWorkspace } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
 import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';

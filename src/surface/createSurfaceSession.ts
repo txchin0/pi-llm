@@ -5,11 +5,11 @@ import {
   SettingsManager,
 } from '@earendil-works/pi-coding-agent';
 
+import { validateAgentLlmEndpoint } from '../config/agentLlm.js';
 import type {
   SurfaceAgentConfig,
   SurfaceModel,
 } from '../config/surfaceAgent.js';
-import { validateSurfaceLlmEndpoint } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
 import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
 import { SURFACE_BASE_TOOLS } from '../integrations/baseTools.js';
@@ -71,7 +71,7 @@ function buildSurfaceExtensionDependencies(
 export async function createSurfaceSession(
   options: CreateSurfaceSessionOptions,
 ): Promise<AgentSession> {
-  await validateSurfaceLlmEndpoint(options.surfaceAgentConfig);
+  await validateAgentLlmEndpoint(options.surfaceAgentConfig, 'surface');
   await ensureUserWorkspace(options.userMemoryWorkspace);
 
   const settingsManager = SettingsManager.inMemory({

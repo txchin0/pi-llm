@@ -1,26 +1,23 @@
 import { performance } from 'node:perf_hooks';
 
+import { resolveUserMemoryWorkspace } from '../src/config/agentLlm.js';
 import { env } from '../src/config/env.js';
 import {
-  createSurfaceAuthStorage,
-  createSurfaceModelRegistry,
-  resolveSurfaceModel,
-  resolveUserMemoryWorkspace,
+  createSurfaceLlmRuntime,
   surfaceAgentConfig,
 } from '../src/config/surfaceAgent.js';
 import { createSurfaceSession } from '../src/surface/createSurfaceSession.js';
 
 const t0 = performance.now();
-const auth = createSurfaceAuthStorage();
-const reg = createSurfaceModelRegistry(auth);
-const model = resolveSurfaceModel(reg);
+const { authStorage, modelRegistry, model } =
+  createSurfaceLlmRuntime(surfaceAgentConfig);
 const ws = resolveUserMemoryWorkspace(env.DATA_ROOT, 'timing-user');
 const session = await createSurfaceSession({
   userMemoryWorkspace: ws,
   dataRoot: env.DATA_ROOT,
   model,
-  authStorage: auth,
-  modelRegistry: reg,
+  authStorage,
+  modelRegistry,
   surfaceAgentConfig,
 });
 console.log('create ms', (performance.now() - t0).toFixed(0));
