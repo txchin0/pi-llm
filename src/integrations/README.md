@@ -22,7 +22,7 @@ Integrations are resolved **per user** at session creation time:
 IntegrationStore (integrations.json)
   → resolveEnabledIntegrations(store, userId)
   → buildIntegrationSessionExtras(enabled, role, ctx)
-  → createSurfaceSession / createWorkerSession
+  → buildRoleAgentSession (via createSurfaceSession / createWorkerSession)
 ```
 
 Resolution happens in:
