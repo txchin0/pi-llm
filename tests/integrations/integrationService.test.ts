@@ -44,6 +44,13 @@ describe('createIntegrationService', () => {
         enabled: false,
         oauth: { provider_id: 'google' },
       },
+      {
+        id: 'google_tasks',
+        label: 'Google Tasks',
+        default_enabled: false,
+        enabled: false,
+        oauth: { provider_id: 'google' },
+      },
     ]);
   });
 

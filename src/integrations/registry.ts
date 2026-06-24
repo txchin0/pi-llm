@@ -4,9 +4,10 @@ import { isKnownOAuthProvider } from './oauth/oauthProviderRegistry.js';
 import type { IntegrationDefinition } from './types.js';
 import { getIntegrationToolsForRole } from './types.js';
 import { googleCalendarIntegration } from './googleCalendar/index.js';
+import { googleTasksIntegration } from './googleTasks/index.js';
 import { webSearchIntegration } from './webSearch/index.js';
 
-const DEFINITIONS = [webSearchIntegration, googleCalendarIntegration] as const;
+const DEFINITIONS = [webSearchIntegration, googleCalendarIntegration, googleTasksIntegration] as const;
 
 const integrationMap = new Map<string, IntegrationDefinition>(
   DEFINITIONS.map((definition) => [definition.id, definition]),

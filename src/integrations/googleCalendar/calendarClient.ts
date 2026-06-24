@@ -2,6 +2,13 @@ import { DateTime } from 'luxon';
 
 import { env } from '../../config/env.js';
 import type { calendar_v3 } from 'googleapis';
+import {
+  buildDateRangeInTimezone,
+  parseDateTimeInput,
+  toRfc3339,
+} from '../google/dateBounds.js';
+
+export { buildDateRangeInTimezone, parseDateTimeInput, toRfc3339 } from '../google/dateBounds.js';
 
 const DEFAULT_CALENDAR_ID = 'primary';
 const DEFAULT_MAX_RESULTS = 10;
@@ -59,46 +66,6 @@ export type CalendarApi = Pick<
   calendar_v3.Calendar,
   'events' | 'freebusy'
 >;
-
-/** Builds RFC3339 bounds for all events on a calendar date in the app timezone. */
-export function buildDateRangeInTimezone(
-  date: string,
-  timezone: string = env.TIMEZONE,
-): { timeMin: string; timeMax: string } {
-  const dayStart = DateTime.fromISO(date, { zone: timezone }).startOf('day');
-  if (!dayStart.isValid) {
-    throw new Error(`Invalid date "${date}" for timezone "${timezone}"`);
-  }
-
-  const dayEnd = dayStart.endOf('day');
-  return {
-    timeMin: toRfc3339(dayStart),
-    timeMax: toRfc3339(dayEnd),
-  };
-}
-
-/** Parses a date or datetime string in the app timezone for API calls. */
-export function parseDateTimeInput(
-  value: string,
-  timezone: string = env.TIMEZONE,
-): DateTime {
-  const fromIso = DateTime.fromISO(value, { zone: timezone });
-  if (fromIso.isValid) {
-    return fromIso;
-  }
-
-  const fromDate = DateTime.fromISO(value, { zone: timezone }).startOf('day');
-  if (fromDate.isValid) {
-    return fromDate;
-  }
-
-  throw new Error(`Invalid date or datetime "${value}"`);
-}
-
-/** Converts a Luxon DateTime to RFC3339 for the Google Calendar API. */
-export function toRfc3339(value: DateTime): string {
-  return value.toUTC().toISO({ suppressMilliseconds: true }) ?? value.toUTC().toISO()!;
-}
 
 /** Formats one Google event into a display-friendly summary. */
 export function formatCalendarEvent(

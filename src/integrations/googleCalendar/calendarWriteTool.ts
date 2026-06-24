@@ -3,13 +3,18 @@ import { Type } from 'typebox';
 
 import type { IntegrationContext } from '../types.js';
 import {
+  cancelledToolResult,
+  formatGoogleToolError,
+  resolveGoogleAccessToken,
+  textToolResult,
+} from '../google/toolRuntime.js';
+import {
   createCalendarEvent,
   deleteCalendarEvent,
   findExistingEventBySummaryAndStart,
   summarizeEvents,
   updateCalendarEvent,
 } from './calendarClient.js';
-import { formatOAuthConnectError, formatOAuthConnectMessage } from './oauthConnectMessage.js';
 
 const calendarWriteSchema = Type.Object({
   action: Type.Union(
@@ -55,40 +60,21 @@ export function registerCalendarWriteTool(pi: ExtensionAPI, ctx: IntegrationCont
     async execute(_toolCallId, params, signal) {
       try {
         if (signal?.aborted) {
-          return cancelledResult();
+          return cancelledToolResult();
         }
 
-        const accessToken = await resolveAccessToken(ctx);
+        const accessToken = await resolveGoogleAccessToken(ctx);
         const text = await runCalendarWriteAction(accessToken, params);
-        return textResult(text);
+        return textToolResult(text);
       } catch (error) {
         if (signal?.aborted) {
-          return cancelledResult();
+          return cancelledToolResult();
         }
 
-        return textResult(formatCalendarWriteError(error, ctx.userId));
+        return textToolResult(formatGoogleToolError('Calendar', error, ctx.userId));
       }
     },
   });
-}
-
-/** Resolves an OAuth access token or throws when the integration is not connected. */
-async function resolveAccessToken(ctx: IntegrationContext): Promise<string> {
-  if (ctx.getAccessToken === undefined) {
-    throw new NotConnectedError(ctx.userId);
-  }
-  return ctx.getAccessToken();
-}
-
-class NotConnectedError extends Error {
-  readonly userId: string;
-
-  /** Marks a missing OAuth binding as a not-connected state for friendly tool output. */
-  constructor(userId: string) {
-    super('OAuth not connected');
-    this.name = 'NotConnectedError';
-    this.userId = userId;
-  }
 }
 
 /** Dispatches a calendar write action and returns a plain-text summary. */
@@ -205,32 +191,4 @@ async function deleteEvent(
 
   await deleteCalendarEvent(accessToken, params.eventId);
   return `Calendar event ${params.eventId} deleted.`;
-}
-
-function formatCalendarWriteError(error: unknown, userId: string): string {
-  if (error instanceof NotConnectedError) {
-    return formatOAuthConnectMessage(userId);
-  }
-
-  const oauthMessage = formatOAuthConnectError(error, userId);
-  if (oauthMessage !== null) {
-    return oauthMessage;
-  }
-
-  if (error instanceof Error) {
-    return `Calendar write failed: ${error.message}`;
-  }
-
-  return 'Calendar write failed';
-}
-
-function textResult(text: string) {
-  return {
-    content: [{ type: 'text' as const, text }],
-    details: {},
-  };
-}
-
-function cancelledResult() {
-  return textResult('Request was cancelled');
 }

@@ -2,17 +2,20 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { Type } from 'typebox';
 
 import type { IntegrationContext } from '../types.js';
+import { buildDateRangeInTimezone, parseDateTimeInput, toRfc3339 } from '../google/dateBounds.js';
 import {
-  buildDateRangeInTimezone,
+  cancelledToolResult,
+  formatGoogleToolError,
+  resolveGoogleAccessToken,
+  textToolResult,
+} from '../google/toolRuntime.js';
+import {
   listEventsOnDate,
   listUpcomingEvents,
-  parseDateTimeInput,
   queryFreeBusy,
   summarizeEvents,
   summarizeFreeBusy,
-  toRfc3339,
 } from './calendarClient.js';
-import { formatOAuthConnectError, formatOAuthConnectMessage } from './oauthConnectMessage.js';
 
 const calendarReadSchema = Type.Object({
   mode: Type.Optional(
@@ -67,74 +70,55 @@ export function registerCalendarReadTool(pi: ExtensionAPI, ctx: IntegrationConte
     async execute(_toolCallId, params, signal) {
       try {
         if (signal?.aborted) {
-          return cancelledResult();
+          return cancelledToolResult();
         }
 
-        const accessToken = await resolveAccessToken(ctx);
+        const accessToken = await resolveGoogleAccessToken(ctx);
         const mode: CalendarReadMode = params.mode ?? 'upcoming';
 
         if (mode === 'free_busy') {
           const text = await runFreeBusyQuery(accessToken, params);
-          return textResult(text);
+          return textToolResult(text);
         }
 
         if (mode === 'on_date') {
           if (params.date === undefined) {
-            return textResult('on_date mode requires a date (YYYY-MM-DD).');
+            return textToolResult('on_date mode requires a date (YYYY-MM-DD).');
           }
           const events = await listEventsOnDate(
             accessToken,
             params.date,
             buildListOptions(params.maxResults),
           );
-          return textResult(summarizeEvents(events));
+          return textToolResult(summarizeEvents(events));
         }
 
         if (mode === 'range') {
           if (params.timeMin === undefined || params.timeMax === undefined) {
-            return textResult('range mode requires both timeMin and timeMax.');
+            return textToolResult('range mode requires both timeMin and timeMax.');
           }
           const events = await listUpcomingEvents(accessToken, {
             ...buildListOptions(params.maxResults),
             timeMin: toRfc3339(parseDateTimeInput(params.timeMin)),
             timeMax: toRfc3339(parseDateTimeInput(params.timeMax)),
           });
-          return textResult(summarizeEvents(events));
+          return textToolResult(summarizeEvents(events));
         }
 
         const events = await listUpcomingEvents(
           accessToken,
           buildListOptions(params.maxResults),
         );
-        return textResult(summarizeEvents(events));
+        return textToolResult(summarizeEvents(events));
       } catch (error) {
         if (signal?.aborted) {
-          return cancelledResult();
+          return cancelledToolResult();
         }
 
-        return textResult(formatCalendarReadError(error, ctx.userId));
+        return textToolResult(formatGoogleToolError('Calendar', error, ctx.userId));
       }
     },
   });
-}
-
-/** Resolves an OAuth access token or throws when the integration is not connected. */
-async function resolveAccessToken(ctx: IntegrationContext): Promise<string> {
-  if (ctx.getAccessToken === undefined) {
-    throw new NotConnectedError(ctx.userId);
-  }
-  return ctx.getAccessToken();
-}
-
-class NotConnectedError extends Error {
-  readonly userId: string;
-
-  /** Marks a missing OAuth binding as a not-connected state for friendly tool output. */
-  constructor(userId: string) {
-    super('OAuth not connected');
-    this.name = 'NotConnectedError';
-    this.userId = userId;
-  }
 }
 
 /** Runs a free/busy query using explicit or date-derived bounds. */
@@ -174,32 +158,4 @@ function buildListOptions(maxResults?: number) {
     return {};
   }
   return { maxResults };
-}
-
-function formatCalendarReadError(error: unknown, userId: string): string {
-  if (error instanceof NotConnectedError) {
-    return formatOAuthConnectMessage(userId);
-  }
-
-  const oauthMessage = formatOAuthConnectError(error, userId);
-  if (oauthMessage !== null) {
-    return oauthMessage;
-  }
-
-  if (error instanceof Error) {
-    return `Calendar read failed: ${error.message}`;
-  }
-
-  return 'Calendar read failed';
-}
-
-function textResult(text: string) {
-  return {
-    content: [{ type: 'text' as const, text }],
-    details: {},
-  };
-}
-
-function cancelledResult() {
-  return textResult('Request was cancelled');
 }
