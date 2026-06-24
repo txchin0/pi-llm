@@ -1,32 +1,27 @@
-import type { AuthStorage, ModelRegistry, AgentSession } from '@earendil-works/pi-coding-agent';
-import {
-  createAgentSession,
-  SessionManager,
-  SettingsManager,
+import type {
+  AgentSession,
+  AuthStorage,
+  ModelRegistry,
 } from '@earendil-works/pi-coding-agent';
 
+import { buildRoleAgentSession } from '../agent/buildRoleAgentSession.js';
 import { validateAgentLlmEndpoint } from '../config/agentLlm.js';
 import type {
   SurfaceAgentConfig,
   SurfaceModel,
 } from '../config/surfaceAgent.js';
 import type { SessionId } from '../contracts/respond.js';
-import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
 import { SURFACE_BASE_TOOLS } from '../integrations/baseTools.js';
-import { buildIntegrationSessionExtras } from '../integrations/buildIntegrationSessionExtras.js';
-import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { EnabledIntegration } from '../integrations/types.js';
 import type { AppLogger } from '../logging/types.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
 
 import { buildSurfaceSystemPrompt } from './buildSurfaceSystemPrompt.js';
-import { createSurfaceResourceLoader } from './createSurfaceResourceLoader.js';
 import {
   createSurfaceExtensionFactory,
   type SurfaceExtensionDependencies,
 } from './extensions/surfaceExtension.js';
-import { ensureUserWorkspace } from './util/ensureUserWorkspace.js';
 
 export type CreateSurfaceSessionOptions = {
   userId: string;
@@ -72,53 +67,33 @@ export async function createSurfaceSession(
   options: CreateSurfaceSessionOptions,
 ): Promise<AgentSession> {
   await validateAgentLlmEndpoint(options.surfaceAgentConfig, 'surface');
-  await ensureUserWorkspace(options.userMemoryWorkspace);
 
-  const settingsManager = SettingsManager.inMemory({
-    compaction: { enabled: false },
-    retry: { enabled: true, maxRetries: 2 },
-  });
-
-  const integrationExtras = buildIntegrationSessionExtras(
-    options.enabledIntegrations,
-    'surface',
-    {
-      userId: options.userId,
-      oauthService: options.oauthService ?? noopOAuthService,
-      ...(options.log !== undefined ? { log: options.log } : {}),
-    },
-  );
-  assertToolAllowlistSync(SURFACE_BASE_TOOLS, integrationExtras.toolNames);
-
-  const resourceLoader = await createSurfaceResourceLoader({
-    cwd: options.userMemoryWorkspace,
+  return buildRoleAgentSession({
+    userId: options.userId,
+    userMemoryWorkspace: options.userMemoryWorkspace,
     dataRoot: options.dataRoot,
-    systemPrompt: buildSurfaceSystemPrompt(integrationExtras.promptFragments),
-    settingsManager,
-    extensionFactories: [
-      createSurfaceExtensionFactory(buildSurfaceExtensionDependencies(options)),
-      integrationExtras.extensionFactory,
-    ],
-  });
-
-  const { session, extensionsResult } = await createAgentSession({
-    cwd: options.userMemoryWorkspace,
     model: options.model,
-    thinkingLevel: options.surfaceAgentConfig.thinkingLevel,
-    tools: [...SURFACE_BASE_TOOLS, ...integrationExtras.toolNames],
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
-    resourceLoader,
-    sessionManager: SessionManager.inMemory(options.userMemoryWorkspace),
-    settingsManager,
+    thinkingLevel: options.surfaceAgentConfig.thinkingLevel,
+    role: 'surface',
+    enabledIntegrations: options.enabledIntegrations,
+    ...(options.oauthService !== undefined ? { oauthService: options.oauthService } : {}),
+    ...(options.log !== undefined ? { log: options.log } : {}),
+    spec: {
+      baseTools: SURFACE_BASE_TOOLS,
+      buildSystemPrompt: buildSurfaceSystemPrompt,
+      settings: {
+        compaction: { enabled: false },
+        retry: { enabled: true, maxRetries: 2 },
+      },
+      roleExtensionFactories: [
+        createSurfaceExtensionFactory(buildSurfaceExtensionDependencies(options)),
+      ],
+      extensionLoadError: {
+        event: 'surface.extension.load_error',
+        message: 'surface extension failed to load',
+      },
+    },
   });
-
-  for (const { path, error } of extensionsResult.errors) {
-    options.log?.warn(
-      { event: 'surface.extension.load_error', path, error },
-      'surface extension failed to load',
-    );
-  }
-
-  return session;
 }

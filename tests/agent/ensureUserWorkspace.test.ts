@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ensureUserWorkspace } from '../../src/surface/util/ensureUserWorkspace.js';
+import { ensureUserWorkspace } from '../../src/agent/ensureUserWorkspace.js';
 
 const EXPECTED_INDEX = `# Index
 | Topic | Title | Summary | Tags | Last Updated |
