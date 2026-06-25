@@ -1,6 +1,6 @@
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 
-import { getMessageText } from '../surface/util/piMessageContent.js';
+import { getMessageText } from '../agent/piMessageText.js';
 import type { ConversationTurn, TaskContext } from './taskTypes.js';
 
 /** Minimal session history surface used to build task context. */

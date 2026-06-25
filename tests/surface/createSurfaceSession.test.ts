@@ -22,12 +22,13 @@ describe('createSurfaceSession', () => {
 
   it('validates the LLM endpoint before building the session', async () => {
     const callOrder: string[] = [];
-    mocks.validateAgentLlmEndpoint.mockImplementation(async () => {
+    mocks.validateAgentLlmEndpoint.mockImplementation(() => {
       callOrder.push('validateAgentLlmEndpoint');
+      return Promise.resolve();
     });
-    mocks.buildRoleAgentSession.mockImplementation(async () => {
+    mocks.buildRoleAgentSession.mockImplementation(() => {
       callOrder.push('buildRoleAgentSession');
-      return { id: 'sess_test' };
+      return Promise.resolve({ id: 'sess_test' });
     });
 
     await createSurfaceSession({

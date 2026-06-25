@@ -89,6 +89,7 @@ describe('runWorkerPrompt', () => {
 
     vi.mocked(runAgentPrompt).mockImplementation(async function* () {
       for (const event of events) {
+        await Promise.resolve();
         yield event;
       }
     });
@@ -107,6 +108,7 @@ describe('runWorkerPrompt', () => {
     const trace = createMockTrace();
 
     vi.mocked(runAgentPrompt).mockImplementation(async function* () {
+      await Promise.resolve();
       yield {
         type: 'agent_end',
         messages: [

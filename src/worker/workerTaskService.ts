@@ -13,7 +13,7 @@ import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
 import type { TaskRecord } from '../queue/taskTypes.js';
-import { formatNowInTimezone } from '../surface/util/enrichUserMessage.js';
+import { formatNowInTimezone } from '../agent/piMessageText.js';
 
 import { buildWorkerTaskPrompt } from './buildWorkerTaskPrompt.js';
 import { createWorkerSession } from './createWorkerSession.js';

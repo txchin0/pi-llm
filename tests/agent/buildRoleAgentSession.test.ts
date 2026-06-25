@@ -72,15 +72,16 @@ describe('buildRoleAgentSession', () => {
 
   it('seeds the workspace before creating the Pi session', async () => {
     const callOrder: string[] = [];
-    mocks.ensureUserWorkspace.mockImplementation(async () => {
+    mocks.ensureUserWorkspace.mockImplementation(() => {
       callOrder.push('ensureUserWorkspace');
+      return Promise.resolve();
     });
-    mocks.createPiAgentSession.mockImplementation(async () => {
+    mocks.createPiAgentSession.mockImplementation(() => {
       callOrder.push('createPiAgentSession');
-      return {
+      return Promise.resolve({
         session: { id: 'sess_test' },
         extensionsResult: { errors: [] },
-      };
+      });
     });
 
     await buildRoleAgentSession({

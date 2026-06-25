@@ -2,7 +2,7 @@ import { runAgentPrompt } from '../agent/runAgentPrompt.js';
 import type { AppLogger } from '../logging/index.js';
 import { toRespondErrorEvent } from '../respond/toRespondErrorEvent.js';
 import type { RespondService } from '../respond/respondService.js';
-import { enrichUserMessage, formatNowInTimezone } from './util/enrichUserMessage.js';
+import { enrichUserMessage, formatNowInTimezone } from '../agent/piMessageText.js';
 import {
   createPiEventMapperState,
   mapPiEventForRequest,

@@ -90,7 +90,6 @@ describe('RespondController', () => {
   it('yields internal_error when the service throws after start', async () => {
     const service: RespondService = {
       async *handleTurn() {
-        await Promise.resolve();
         throw new Error('service contract violation');
       },
     };

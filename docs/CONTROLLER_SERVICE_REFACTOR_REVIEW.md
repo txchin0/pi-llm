@@ -19,7 +19,7 @@ Every factual claim in the proposal was verified against the codebase. All check
 | Stale stub comment | ✅ | `stubRespondHandler.ts:3` "until the Pi surface agent is wired in" while `index.ts:32` wires the real handler |
 | `noopRespondService` default keeps integration tests green | ✅ | `respond-route.test.ts` calls `buildServer()` with no handler → only `start`/`validation_error` asserted |
 | `PI_SDK_REPORT.md` references the old names | ✅ | lines 941, 988–990, 1089 reference `respondOrchestrator.ts` / `RespondHandler` / `respondHandoff.ts` |
-| `enrichUserMessage`, `mapPiEventToRespond`, registry, factory unchanged | ✅ | their signatures are unaffected by the move |
+| `enrichUserMessage`, `mapPiEventToRespond`, registry, factory unchanged | ✅ | `enrichUserMessage` now lives in `src/agent/piMessageText.ts`; signatures are unaffected |
 
 The diagnosis is correct and the "mostly rename + one extraction" framing is honest.
 

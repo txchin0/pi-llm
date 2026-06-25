@@ -1,24 +1,8 @@
 import type { ProviderFinishReason, ProviderUsage } from '../contracts/provider.js';
-
-export type ProviderStopReason =
-  | 'stop'
-  | 'length'
-  | 'toolUse'
-  | 'error'
-  | 'aborted';
-
-export type AssistantUsageSlice = {
-  input: number;
-  output: number;
-  totalTokens: number;
-};
-
-export type AssistantMessageSlice = {
-  role: 'assistant';
-  usage: AssistantUsageSlice;
-  stopReason: ProviderStopReason;
-  errorMessage?: string;
-};
+import type {
+  AssistantUsageSlice,
+  ProviderStopReason,
+} from './piAssistantMessage.js';
 
 export type PiEventMapperState = {
   step: number;
@@ -63,15 +47,4 @@ export function mapUsage(usage: AssistantUsageSlice): ProviderUsage {
     output_tokens: usage.output,
     total_tokens: usage.totalTokens,
   };
-}
-
-/** Returns true when a Pi message has assistant fields needed for usage mapping. */
-export function isAssistantMessageSlice(
-  message: { role: string },
-): message is AssistantMessageSlice {
-  return (
-    message.role === 'assistant' &&
-    'usage' in message &&
-    'stopReason' in message
-  );
 }

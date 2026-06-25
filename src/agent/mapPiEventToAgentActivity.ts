@@ -2,8 +2,8 @@ import type { AgentSessionEvent } from '@earendil-works/pi-coding-agent';
 
 import type { AgentActivityEvent } from '../contracts/agentActivity.js';
 import { extractAssistantOutcome, findLastAssistantMessage } from './extractAssistantOutcome.js';
+import { isAssistantMessageSlice } from './piAssistantMessage.js';
 import {
-  isAssistantMessageSlice,
   mapStopReason,
   mapUsage,
   type PiActivityMapperContext,

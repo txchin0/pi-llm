@@ -70,7 +70,7 @@ sequenceDiagram
 
     else ready
 
-      Svc->>Svc: enrichUserMessage (+ timezone now)
+      Svc->>Svc: agent/piMessageText.enrichUserMessage (+ timezone now)
 
       Svc->>Pi: runAgentPrompt(session, message)
 

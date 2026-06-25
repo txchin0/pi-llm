@@ -246,7 +246,7 @@ Implementations:
 
 - `registry.getOrCreate(context.sessionId, request.user_id)`.
 - Return `session_busy` if `session.isStreaming`.
-- `enrichUserMessage(request.message, now)`.
+- `enrichUserMessage(request.message, now)` from `src/agent/piMessageText.ts`.
 - Build `mapPiEventForRequest` options (request, mapper context, state).
 - Invoke `runSurfacePrompt(session, enrichedMessage, mapFn)`.
 - Catch runner errors and yield `agent_error` with structured logging.
@@ -288,7 +288,8 @@ Pi harness configuration for a new conversation thread.
 ```
 src/
 ├── agent/
-│   └── runAgentPrompt.ts           # shared Pi subscribe/prompt loop
+│   ├── runAgentPrompt.ts           # shared Pi subscribe/prompt loop
+│   └── piMessageText.ts            # enrichUserMessage · getMessageText
 ├── respond/
 │   ├── respondController.ts
 │   ├── respondService.ts
@@ -298,7 +299,6 @@ src/
 │   ├── surfaceSessionRegistry.ts
 │   ├── createSurfaceSession.ts
 │   ├── mapPiEventToRespond.ts
-│   ├── enrichUserMessage.ts
 │   └── ...
 └── server/
     └── routes/respond.ts
@@ -556,7 +556,7 @@ Execute in order to keep the app runnable after each step.
 - `mapPiEventToRespond.ts`
 - `surfaceSessionRegistry.ts`
 - `createSurfaceSession.ts`
-- `enrichUserMessage.ts`
+- `piMessageText.ts` (agent layer; replaces former `surface/util/enrichUserMessage.ts`)
 
 ---
 
