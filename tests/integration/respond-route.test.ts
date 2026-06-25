@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
+
 type ParsedSseEvent = {
   event: string;
   data: Record<string, unknown>;
@@ -134,7 +136,7 @@ describe('POST /v1/respond', () => {
       service: createSurfaceRespondService({
         registry: {
           getOrCreate: () => Promise.reject(new Error(providerError)),
-        },
+        } as unknown as SurfaceSessionRegistry,
       }),
       now: () => '2026-06-09T12:00:00.000Z',
       requestIdFactory: () => 'req_test00000001',
