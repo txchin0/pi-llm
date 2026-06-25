@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import Database from 'better-sqlite3';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
@@ -60,6 +60,13 @@ function mapRowToTaskListRecord(row: TaskListRow): TaskListRecord {
     errorMessage: row.errorMessage,
   });
 }
+
+type RunningTaskTransitionPatch = Pick<
+  typeof tasks.$inferInsert,
+  'status' | 'result' | 'errorMessage'
+> & {
+  retryCount?: number | SQL;
+};
 
 /** Throws when a running-task transition did not update exactly one row. */
 function assertRunningTaskUpdated(taskId: string, changes: number): void {
@@ -124,6 +131,27 @@ export async function createSqliteTaskQueue(
 
     return mapRowToTaskRecord({ ...row, status: 'running', updatedAt: now });
   });
+
+  /** Applies a guarded running→* transition, asserts exactly one row updated, and logs. */
+  async function transitionRunningTask(
+    taskId: string,
+    patch: RunningTaskTransitionPatch,
+    logMeta: { event: string; message: string },
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const changes = db
+      .update(tasks)
+      .set({ ...patch, updatedAt: now })
+      .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
+      .run().changes;
+
+    assertRunningTaskUpdated(taskId, changes);
+
+    options.log?.info(
+      { event: logMeta.event, task_id: taskId },
+      logMeta.message,
+    );
+  }
 
   const queue: SqliteTaskQueue = {
     close() {
@@ -232,80 +260,31 @@ export async function createSqliteTaskQueue(
     },
 
     markCompleted(taskId, result) {
-      try {
-        const now = new Date().toISOString();
-        const changes = db
-          .update(tasks)
-          .set({ status: 'completed', result, updatedAt: now })
-          .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
-          .run().changes;
-
-        assertRunningTaskUpdated(taskId, changes);
-
-        options.log?.info(
-          { event: 'task.completed', task_id: taskId },
-          'task completed',
-        );
-
-        return Promise.resolve();
-      } catch (error) {
-        return Promise.reject(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      }
+      return transitionRunningTask(
+        taskId,
+        { status: 'completed', result },
+        { event: 'task.completed', message: 'task completed' },
+      );
     },
 
     markFailed(taskId, errorMessage) {
-      try {
-        const now = new Date().toISOString();
-        const changes = db
-          .update(tasks)
-          .set({ status: 'failed', errorMessage, updatedAt: now })
-          .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
-          .run().changes;
-
-        assertRunningTaskUpdated(taskId, changes);
-
-        options.log?.info(
-          { event: 'task.failed', task_id: taskId },
-          'task failed',
-        );
-
-        return Promise.resolve();
-      } catch (error) {
-        return Promise.reject(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      }
+      return transitionRunningTask(
+        taskId,
+        { status: 'failed', errorMessage },
+        { event: 'task.failed', message: 'task failed' },
+      );
     },
 
     requeue(taskId, errorMessage) {
-      try {
-        const now = new Date().toISOString();
-        const changes = db
-          .update(tasks)
-          .set({
-            status: 'pending',
-            retryCount: sql`${tasks.retryCount} + 1`,
-            errorMessage,
-            updatedAt: now,
-          })
-          .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
-          .run().changes;
-
-        assertRunningTaskUpdated(taskId, changes);
-
-        options.log?.info(
-          { event: 'task.requeued', task_id: taskId },
-          'task requeued',
-        );
-
-        return Promise.resolve();
-      } catch (error) {
-        return Promise.reject(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      }
+      return transitionRunningTask(
+        taskId,
+        {
+          status: 'pending',
+          retryCount: sql`${tasks.retryCount} + 1`,
+          errorMessage,
+        },
+        { event: 'task.requeued', message: 'task requeued' },
+      );
     },
 
     requeueStuckRunning() {
