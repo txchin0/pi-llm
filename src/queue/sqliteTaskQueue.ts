@@ -68,11 +68,14 @@ type RunningTaskTransitionPatch = Pick<
   retryCount?: number | SQL;
 };
 
-/** Throws when a running-task transition did not update exactly one row. */
-function assertRunningTaskUpdated(taskId: string, changes: number): void {
-  if (changes !== 1) {
-    throw new Error(`task ${taskId} is not running or does not exist`);
-  }
+/** Returns an error when a running-task transition did not update exactly one row, else null. */
+function runningTaskNotUpdatedError(
+  taskId: string,
+  changes: number,
+): Error | null {
+  return changes !== 1
+    ? new Error(`task ${taskId} is not running or does not exist`)
+    : null;
 }
 
 /** Maps a Drizzle row to a validated task record. */
@@ -133,7 +136,7 @@ export async function createSqliteTaskQueue(
   });
 
   /** Applies a guarded running→* transition, asserts exactly one row updated, and logs. */
-  async function transitionRunningTask(
+  function transitionRunningTask(
     taskId: string,
     patch: RunningTaskTransitionPatch,
     logMeta: { event: string; message: string },
@@ -145,12 +148,17 @@ export async function createSqliteTaskQueue(
       .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
       .run().changes;
 
-    assertRunningTaskUpdated(taskId, changes);
+    const notUpdated = runningTaskNotUpdatedError(taskId, changes);
+    if (notUpdated) {
+      return Promise.reject(notUpdated);
+    }
 
     options.log?.info(
       { event: logMeta.event, task_id: taskId },
       logMeta.message,
     );
+
+    return Promise.resolve();
   }
 
   const queue: SqliteTaskQueue = {
