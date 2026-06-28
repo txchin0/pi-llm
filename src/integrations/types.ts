@@ -42,6 +42,8 @@ export type IntegrationDefinition = {
   systemPrompt?: Partial<Record<AgentLlmRole, string>>;
   parseConfig?(raw: Record<string, unknown>): unknown;
   onSessionShutdown?: () => Promise<void> | void;
+  /** Optional process-wide warmup run once at server startup (e.g. eager module import). Must be idempotent. */
+  onProcessStartup?: () => Promise<void> | void;
   onProcessShutdown?: () => Promise<void> | void;
 };
 

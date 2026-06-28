@@ -12,7 +12,7 @@ import {
   createWorkerLlmRuntime,
   workerAgentConfig,
 } from './config/workerAgent.js';
-import { collectProcessShutdownHooks, validateRegistry } from './integrations/registry.js';
+import { collectProcessShutdownHooks, collectProcessStartupHooks, validateRegistry } from './integrations/registry.js';
 import { createFileOAuthTokenStore } from './integrations/oauth/fileOAuthTokenStore.js';
 import { noopOAuthService } from './integrations/oauth/noopOAuthService.js';
 import { createOAuthService } from './integrations/oauth/oauthService.js';
@@ -38,6 +38,7 @@ export async function startServer(): Promise<void> {
   const logger = createRootLogger();
 
   validateRegistry();
+  const startupHooks = collectProcessStartupHooks().map((hook) => Promise.resolve(hook()));
 
   await mkdir(env.DATA_ROOT, { recursive: true });
 
@@ -150,6 +151,9 @@ export async function startServer(): Promise<void> {
   });
 
   try {
+    // Warm integration-declared modules (e.g. googleapis) before accepting traffic.
+    await Promise.all(startupHooks);
+
     await app.listen({ host: listenHost, port: env.PORT });
     createChildLogger(logger, { component: 'server' }).info(
       {

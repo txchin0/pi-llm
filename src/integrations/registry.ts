@@ -92,6 +92,17 @@ export function validateRegistry(): void {
   }
 }
 
+/** Collects process-scoped startup hooks from all registered integrations. */
+export function collectProcessStartupHooks(): Array<() => Promise<void> | void> {
+  const hooks: Array<() => Promise<void> | void> = [];
+  for (const definition of DEFINITIONS) {
+    if (definition.onProcessStartup !== undefined) {
+      hooks.push(definition.onProcessStartup);
+    }
+  }
+  return hooks;
+}
+
 /** Collects process-scoped shutdown hooks from all registered integrations. */
 export function collectProcessShutdownHooks(): Array<() => Promise<void> | void> {
   const hooks: Array<() => Promise<void> | void> = [];

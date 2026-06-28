@@ -6,6 +6,7 @@ import {
   toTasksApiDueBound,
   type DateOnly,
 } from '../google/dateBounds.js';
+import { createGoogleAuth } from '../google/loadGoogleApis.js';
 
 /** Normalized task list returned to integration tools. */
 export type TaskListSummary = {
@@ -60,9 +61,7 @@ const API_MAX_RESULTS = 100;
 
 /** Creates a googleapis Tasks client authenticated with a bearer access token. */
 export async function createTasksApi(accessToken: string): Promise<TasksApi> {
-  const { google } = await import('googleapis');
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
+  const { google, auth } = await createGoogleAuth(accessToken);
   return google.tasks({ version: 'v1', auth });
 }
 

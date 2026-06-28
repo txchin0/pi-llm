@@ -7,6 +7,7 @@ import {
   parseDateTimeInput,
   toRfc3339,
 } from '../google/dateBounds.js';
+import { createGoogleAuth } from '../google/loadGoogleApis.js';
 
 export { buildDateRangeInTimezone, parseDateTimeInput, toRfc3339 } from '../google/dateBounds.js';
 
@@ -136,9 +137,7 @@ export function summarizeFreeBusy(intervals: FreeBusyInterval[]): string {
 
 /** Creates a googleapis Calendar client authenticated with a bearer access token. */
 export async function createCalendarApi(accessToken: string): Promise<CalendarApi> {
-  const { google } = await import('googleapis');
-  const auth = new google.auth.OAuth2();
-  auth.setCredentials({ access_token: accessToken });
+  const { google, auth } = await createGoogleAuth(accessToken);
   return google.calendar({ version: 'v3', auth });
 }
 

@@ -1,4 +1,5 @@
 import type { IntegrationDefinition, IntegrationToolSpec } from '../types.js';
+import { warmGoogleApisIfConfigured } from '../google/loadGoogleApis.js';
 import { registerTasksReadTool } from './tasksReadTool.js';
 import { registerTasksWriteTool } from './tasksWriteTool.js';
 
@@ -41,4 +42,5 @@ export const googleTasksIntegration: IntegrationDefinition = {
     worker:
       'Use tasks_write with required tasklistId from prior read/write results. To complete a task, update with status: completed. Reuse task id and list id on retries.',
   },
+  onProcessStartup: warmGoogleApisIfConfigured,
 };

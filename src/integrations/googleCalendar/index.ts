@@ -1,4 +1,5 @@
 import type { IntegrationDefinition, IntegrationToolSpec } from '../types.js';
+import { warmGoogleApisIfConfigured } from '../google/loadGoogleApis.js';
 import { registerCalendarReadTool } from './calendarReadTool.js';
 import { registerCalendarWriteTool } from './calendarWriteTool.js';
 
@@ -43,4 +44,5 @@ export const googleCalendarIntegration: IntegrationDefinition = {
     worker:
       'Use calendar_write to create, update, or delete calendar events. Reuse event ids from prior tool results on retries to stay idempotent.',
   },
+  onProcessStartup: warmGoogleApisIfConfigured,
 };
