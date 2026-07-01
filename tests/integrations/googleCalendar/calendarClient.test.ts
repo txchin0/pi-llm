@@ -9,6 +9,7 @@ import {
   summarizeEvents,
   summarizeFreeBusy,
   toRfc3339,
+  updateCalendarEvent,
   type CalendarApi,
 } from '../../../src/integrations/googleCalendar/calendarClient.js';
 
@@ -56,6 +57,38 @@ describe('formatCalendarEvent', () => {
     );
     expect(timed.start).toContain('2026-06-16');
   });
+
+  it('parses reminder fields from API responses', () => {
+    const defaults = formatCalendarEvent({
+      id: 'c',
+      summary: 'Defaults',
+      start: { dateTime: '2026-06-16T00:30:00Z' },
+      end: { dateTime: '2026-06-16T01:00:00Z' },
+      reminders: { useDefault: true },
+    });
+    expect(defaults.useDefaultReminders).toBe(true);
+
+    const custom = formatCalendarEvent({
+      id: 'd',
+      summary: 'Custom',
+      start: { dateTime: '2026-06-16T00:30:00Z' },
+      end: { dateTime: '2026-06-16T01:00:00Z' },
+      reminders: {
+        useDefault: false,
+        overrides: [{ method: 'popup', minutes: 30 }, { method: 'popup', minutes: 10 }],
+      },
+    });
+    expect(custom.popupReminderMinutes).toEqual([30, 10]);
+
+    const cleared = formatCalendarEvent({
+      id: 'e',
+      summary: 'Cleared',
+      start: { dateTime: '2026-06-16T00:30:00Z' },
+      end: { dateTime: '2026-06-16T01:00:00Z' },
+      reminders: { useDefault: false, overrides: [] },
+    });
+    expect(cleared.popupReminderMinutes).toEqual([]);
+  });
 });
 
 describe('summarizeEvents', () => {
@@ -75,6 +108,41 @@ describe('summarizeEvents', () => {
 
     expect(text).toContain('Lunch');
     expect(text).toContain('evt-1');
+  });
+
+  it('renders reminder display cases', () => {
+    const defaults = summarizeEvents([
+      {
+        id: 'evt-2',
+        summary: 'Defaults',
+        start: '2026-06-16 12:00 AEST',
+        end: '2026-06-16 13:00 AEST',
+        useDefaultReminders: true,
+      },
+    ]);
+    expect(defaults).toContain('Reminders: calendar defaults');
+
+    const none = summarizeEvents([
+      {
+        id: 'evt-3',
+        summary: 'None',
+        start: '2026-06-16 12:00 AEST',
+        end: '2026-06-16 13:00 AEST',
+        popupReminderMinutes: [],
+      },
+    ]);
+    expect(none).toContain('Reminders: none');
+
+    const custom = summarizeEvents([
+      {
+        id: 'evt-4',
+        summary: 'Custom',
+        start: '2026-06-16 12:00 AEST',
+        end: '2026-06-16 13:00 AEST',
+        popupReminderMinutes: [30, 10],
+      },
+    ]);
+    expect(custom).toContain('Reminders: 30 min before, 10 min before');
   });
 });
 
@@ -157,6 +225,159 @@ describe('calendar API wrappers', () => {
 
     expect(created.id).toBe('new-evt');
     expect(insertMock).toHaveBeenCalledOnce();
+  });
+
+  it('sends popup reminders on create when reminderMinutes is provided', async () => {
+    const insertMock = vi.fn(() =>
+      Promise.resolve({
+        data: {
+          id: 'new-evt',
+          summary: 'Dentist',
+          start: { dateTime: '2026-06-16T02:00:00Z', timeZone: 'Australia/Sydney' },
+          end: { dateTime: '2026-06-16T03:00:00Z', timeZone: 'Australia/Sydney' },
+          reminders: {
+            useDefault: false,
+            overrides: [{ method: 'popup', minutes: 30 }],
+          },
+        },
+      }),
+    );
+
+    const calendarApi = {
+      events: { insert: insertMock, list: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+      freebusy: { query: vi.fn() },
+    } as unknown as CalendarApi;
+
+    await createCalendarEvent(
+      'token',
+      {
+        summary: 'Dentist',
+        start: '2026-06-16T12:00:00',
+        end: '2026-06-16T13:00:00',
+        reminderMinutes: [30],
+      },
+      calendarApi,
+    );
+
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.objectContaining({
+          reminders: {
+            useDefault: false,
+            overrides: [{ method: 'popup', minutes: 30 }],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('omits reminders on create when reminderMinutes is not provided', async () => {
+    const insertMock = vi.fn(() =>
+      Promise.resolve({
+        data: {
+          id: 'new-evt',
+          summary: 'Dentist',
+          start: { dateTime: '2026-06-16T02:00:00Z', timeZone: 'Australia/Sydney' },
+          end: { dateTime: '2026-06-16T03:00:00Z', timeZone: 'Australia/Sydney' },
+        },
+      }),
+    );
+
+    const calendarApi = {
+      events: { insert: insertMock, list: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+      freebusy: { query: vi.fn() },
+    } as unknown as CalendarApi;
+
+    await createCalendarEvent(
+      'token',
+      {
+        summary: 'Dentist',
+        start: '2026-06-16T12:00:00',
+        end: '2026-06-16T13:00:00',
+      },
+      calendarApi,
+    );
+
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requestBody: expect.not.objectContaining({
+          reminders: expect.anything(),
+        }),
+      }),
+    );
+  });
+
+  it('throws when reminderMinutes is invalid on create', async () => {
+    const calendarApi = {
+      events: { insert: vi.fn(), list: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+      freebusy: { query: vi.fn() },
+    } as unknown as CalendarApi;
+
+    await expect(
+      createCalendarEvent(
+        'token',
+        {
+          summary: 'Dentist',
+          start: '2026-06-16T12:00:00',
+          end: '2026-06-16T13:00:00',
+          reminderMinutes: [30, 20, 15, 10, 5, 1],
+        },
+        calendarApi,
+      ),
+    ).rejects.toThrow('reminderMinutes: at most 5 reminders are allowed.');
+
+    await expect(
+      createCalendarEvent(
+        'token',
+        {
+          summary: 'Dentist',
+          start: '2026-06-16T12:00:00',
+          end: '2026-06-16T13:00:00',
+          reminderMinutes: [50000],
+        },
+        calendarApi,
+      ),
+    ).rejects.toThrow('reminderMinutes: each value must be between 0 and 40320 minutes.');
+  });
+
+  it('patches reminders on update when reminderMinutes is provided', async () => {
+    const patchMock = vi.fn(() =>
+      Promise.resolve({
+        data: {
+          id: 'evt-1',
+          summary: 'Dentist',
+          start: { dateTime: '2026-06-16T02:00:00Z', timeZone: 'Australia/Sydney' },
+          end: { dateTime: '2026-06-16T03:00:00Z', timeZone: 'Australia/Sydney' },
+          reminders: { useDefault: false, overrides: [] },
+        },
+      }),
+    );
+
+    const calendarApi = {
+      events: { insert: vi.fn(), list: vi.fn(), patch: patchMock, delete: vi.fn() },
+      freebusy: { query: vi.fn() },
+    } as unknown as CalendarApi;
+
+    await updateCalendarEvent(
+      'token',
+      {
+        eventId: 'evt-1',
+        reminderMinutes: [],
+      },
+      calendarApi,
+    );
+
+    expect(patchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: 'evt-1',
+        requestBody: expect.objectContaining({
+          reminders: {
+            useDefault: false,
+            overrides: [],
+          },
+        }),
+      }),
+    );
   });
 });
 

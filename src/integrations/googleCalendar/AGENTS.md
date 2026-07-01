@@ -16,7 +16,7 @@ Official scope list: [Calendar API authorization](https://developers.google.com/
 - **Calendar id**: All API calls default to `primary` (the authenticated user's primary calendar). Not exposed on tool schemas today.
 - **Timezone**: Dates and datetimes are interpreted in `env.TIMEZONE` (default `Australia/Sydney`). Sent to Google as RFC3339 UTC or all-day `date` fields.
 - **Datetime input**: ISO date (`YYYY-MM-DD`) or ISO datetime (`YYYY-MM-DDTHH:mm` or full RFC3339). Date-only without `T` creates an all-day event.
-- **Tool output**: Plain text summaries with event id, title, when, location, description. Write tools echo `event id` for idempotent retries.
+- **Tool output**: Plain text summaries with event id, title, when, location, description, reminders (when Google includes them). Write tools echo `event id` for idempotent retries.
 
 ---
 
@@ -81,6 +81,7 @@ Registered in `calendarWriteTool.ts`. Worker agent only.
   location?: string;
   start?: string;        // ISO date or datetime — required for create
   end?: string;          // ISO date or datetime — required for create
+  reminderMinutes?: number[];  // popup reminders N minutes before start; omit = calendar defaults, [] = clear
   skipDuplicateCheck?: boolean;  // default false — create only
 }
 ```
@@ -89,9 +90,21 @@ Registered in `calendarWriteTool.ts`. Worker agent only.
 
 | Action | Required params | Optional params | Notes |
 |--------|-----------------|-----------------|-------|
-| `create` | `summary`, `start`, `end` | `description`, `location`, `skipDuplicateCheck` | Before insert, searches for existing event with same title + start (±1 min). Returns existing id if found unless `skipDuplicateCheck: true`. |
-| `update` | `eventId` | `summary`, `description`, `location`, `start`, `end` | Partial update — only supplied fields change. |
+| `create` | `summary`, `start`, `end` | `description`, `location`, `reminderMinutes`, `skipDuplicateCheck` | Before insert, searches for existing event with same title + start (±1 min). Returns existing id if found unless `skipDuplicateCheck: true`. |
+| `update` | `eventId` | `summary`, `description`, `location`, `start`, `end`, `reminderMinutes` | Partial update — only supplied fields change. |
 | `delete` | `eventId` | — | Permanently removes the event. |
+
+### Reminder semantics (`reminderMinutes`)
+
+| Tool input | Google `reminders` body |
+|------------|-------------------------|
+| Omitted | Not sent — calendar default reminders apply |
+| `[30, 10]` | `{ useDefault: false, overrides: [{ method: 'popup', minutes: 30 }, …] }` |
+| `[]` | `{ useDefault: false, overrides: [] }` — clears reminders |
+
+On update, omit `reminderMinutes` to leave existing reminders unchanged. Each value must be an integer from 0 to 40320; at most 5 entries.
+
+Write responses and `calendar_read` list output show reminder info when Google includes it in the event payload.
 
 ### Examples
 
@@ -101,7 +114,8 @@ Registered in `calendarWriteTool.ts`. Worker agent only.
   "summary": "Dentist",
   "start": "2026-06-25T14:00",
   "end": "2026-06-25T15:00",
-  "location": "123 Main St"
+  "location": "123 Main St",
+  "reminderMinutes": [60, 15]
 }
 ```
 
@@ -110,7 +124,8 @@ Registered in `calendarWriteTool.ts`. Worker agent only.
   "action": "update",
   "eventId": "abc123",
   "start": "2026-06-25T15:00",
-  "end": "2026-06-25T16:00"
+  "end": "2026-06-25T16:00",
+  "reminderMinutes": [30]
 }
 ```
 
@@ -207,8 +222,9 @@ Docs: [freebusy.query](https://developers.google.com/calendar/api/v3/reference/f
 | `location` | `location` | Optional |
 | `start` | `start` | `{ date }` all-day or `{ dateTime, timeZone }` timed |
 | `end` | `end` | Same shape as `start` |
+| `reminderMinutes` | `reminders` | `{ useDefault: false, overrides: [{ method: 'popup', minutes }] }`; omitted = calendar defaults |
 
-**Not passed today:** attendees, recurrence, reminders, `conferenceData`, `colorId`, `visibility`, `sendUpdates`, etc.
+**Not passed today:** attendees, recurrence, `conferenceData`, `colorId`, `visibility`, `sendUpdates`, etc.
 
 Docs: [events.insert](https://developers.google.com/calendar/api/v3/reference/events/insert)
 
@@ -241,7 +257,7 @@ All-day event:
 |-------------|--------|
 | `calendarId` | `"primary"` |
 | `eventId` | Tool `eventId` |
-| `summary`, `description`, `location`, `start`, `end` | Only fields provided on the tool call |
+| `summary`, `description`, `location`, `start`, `end`, `reminderMinutes` | Only fields provided on the tool call |
 
 Docs: [events.patch](https://developers.google.com/calendar/api/v3/reference/events/patch)
 

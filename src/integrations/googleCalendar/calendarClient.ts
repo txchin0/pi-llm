@@ -13,6 +13,8 @@ export { buildDateRangeInTimezone, parseDateTimeInput, toRfc3339 } from '../goog
 
 const DEFAULT_CALENDAR_ID = 'primary';
 const DEFAULT_MAX_RESULTS = 10;
+const MAX_REMINDER_COUNT = 5;
+const MAX_REMINDER_MINUTES = 40320;
 
 /** Normalized calendar event returned to integration tools. */
 export type CalendarEventSummary = {
@@ -23,6 +25,8 @@ export type CalendarEventSummary = {
   start: string;
   end: string;
   status?: string;
+  popupReminderMinutes?: number[];
+  useDefaultReminders?: boolean;
 };
 
 /** Options for listing events within a time window. */
@@ -42,6 +46,7 @@ export type CreateEventInput = {
   location?: string;
   start: string;
   end: string;
+  reminderMinutes?: number[];
 };
 
 /** Fields for updating an existing calendar event. */
@@ -53,6 +58,7 @@ export type UpdateEventInput = {
   location?: string;
   start?: string;
   end?: string;
+  reminderMinutes?: number[];
 };
 
 /** One busy interval within a free/busy response. */
@@ -95,6 +101,14 @@ export function formatCalendarEvent(
     formatted.status = event.status;
   }
 
+  const reminders = parseEventReminders(event.reminders);
+  if (reminders.useDefaultReminders) {
+    formatted.useDefaultReminders = true;
+  }
+  if (reminders.popupReminderMinutes !== undefined) {
+    formatted.popupReminderMinutes = reminders.popupReminderMinutes;
+  }
+
   return formatted;
 }
 
@@ -115,6 +129,10 @@ export function summarizeEvents(events: CalendarEventSummary[]): string {
     }
     if (event.description) {
       parts.push(`   Description: ${event.description}`);
+    }
+    const reminderLine = formatReminderLine(event);
+    if (reminderLine !== undefined) {
+      parts.push(reminderLine);
     }
     return parts.join('\n');
   });
@@ -342,6 +360,10 @@ function buildEventBody(input: CreateEventInput): calendar_v3.Schema$Event {
   if (input.location !== undefined) {
     body.location = input.location;
   }
+  if (input.reminderMinutes !== undefined) {
+    assertValidReminderMinutes(input.reminderMinutes);
+    body.reminders = buildEventReminders(input.reminderMinutes);
+  }
 
   return body;
 }
@@ -364,8 +386,79 @@ function buildEventPatchBody(input: UpdateEventInput): calendar_v3.Schema$Event 
   if (input.end !== undefined) {
     body.end = toEventDateTime(input.end);
   }
+  if (input.reminderMinutes !== undefined) {
+    assertValidReminderMinutes(input.reminderMinutes);
+    body.reminders = buildEventReminders(input.reminderMinutes);
+  }
 
   return body;
+}
+
+function assertValidReminderMinutes(minutes: number[]): void {
+  if (minutes.length > MAX_REMINDER_COUNT) {
+    throw new Error(`reminderMinutes: at most ${MAX_REMINDER_COUNT} reminders are allowed.`);
+  }
+
+  for (const value of minutes) {
+    if (!Number.isInteger(value)) {
+      throw new Error('reminderMinutes: each value must be an integer number of minutes.');
+    }
+    if (value < 0 || value > MAX_REMINDER_MINUTES) {
+      throw new Error(
+        `reminderMinutes: each value must be between 0 and ${MAX_REMINDER_MINUTES} minutes.`,
+      );
+    }
+  }
+}
+
+function buildEventReminders(minutes: number[]): NonNullable<calendar_v3.Schema$Event['reminders']> {
+  return {
+    useDefault: false,
+    overrides: minutes.map((minuteValue) => ({
+      method: 'popup',
+      minutes: minuteValue,
+    })),
+  };
+}
+
+function parseEventReminders(
+  reminders: calendar_v3.Schema$Event['reminders'] | undefined | null,
+): Pick<CalendarEventSummary, 'popupReminderMinutes' | 'useDefaultReminders'> {
+  if (reminders === undefined || reminders === null) {
+    return {};
+  }
+
+  if (reminders.useDefault === true) {
+    return { useDefaultReminders: true };
+  }
+
+  if (reminders.useDefault === false) {
+    const popupMinutes = (reminders.overrides ?? [])
+      .filter((override) => override.method === 'popup' && override.minutes !== undefined && override.minutes !== null)
+      .map((override) => override.minutes as number);
+    return { popupReminderMinutes: popupMinutes };
+  }
+
+  return {};
+}
+
+function formatReminderLine(event: CalendarEventSummary): string | undefined {
+  if (event.useDefaultReminders) {
+    return '   Reminders: calendar defaults';
+  }
+
+  if (event.popupReminderMinutes === undefined) {
+    return undefined;
+  }
+
+  if (event.popupReminderMinutes.length === 0) {
+    return '   Reminders: none';
+  }
+
+  const offsets = event.popupReminderMinutes
+    .map((minutes) => `${minutes} min before`)
+    .join(', ');
+  return `   Reminders: ${offsets}`;
 }
 
 function toEventDateTime(value: string): calendar_v3.Schema$EventDateTime {

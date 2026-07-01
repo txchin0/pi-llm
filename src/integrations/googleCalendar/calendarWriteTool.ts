@@ -14,6 +14,7 @@ import {
   findExistingEventBySummaryAndStart,
   summarizeEvents,
   updateCalendarEvent,
+  type CreateEventInput,
 } from './calendarClient.js';
 
 const calendarWriteSchema = Type.Object({
@@ -33,6 +34,12 @@ const calendarWriteSchema = Type.Object({
   end: Type.Optional(
     Type.String({ description: 'End time (ISO date or datetime) for create/update' }),
   ),
+  reminderMinutes: Type.Optional(
+    Type.Array(Type.Number(), {
+      description:
+        'Popup reminder offsets in minutes before event start (e.g. [30, 10]). Omit for calendar defaults; pass [] to clear.',
+    }),
+  ),
   skipDuplicateCheck: Type.Optional(
     Type.Boolean({
       description:
@@ -42,6 +49,18 @@ const calendarWriteSchema = Type.Object({
 });
 
 type CalendarWriteAction = 'create' | 'update' | 'delete';
+
+type CalendarWriteParams = {
+  action: CalendarWriteAction;
+  eventId?: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  start?: string;
+  end?: string;
+  reminderMinutes?: number[];
+  skipDuplicateCheck?: boolean;
+};
 
 /** Registers the `calendar_write` tool for worker agents. */
 export function registerCalendarWriteTool(pi: ExtensionAPI, ctx: IntegrationContext): void {
@@ -55,6 +74,7 @@ export function registerCalendarWriteTool(pi: ExtensionAPI, ctx: IntegrationCont
       'Use calendar_write to schedule, reschedule, or cancel calendar events.',
       'On create, the tool checks for an existing event with the same title and start before inserting.',
       'Store and reuse the returned event id on retries so update/delete remain idempotent.',
+      'When the user asks for a reminder before an event, set reminderMinutes (e.g. [30] for 30 minutes before).',
     ],
     parameters: calendarWriteSchema,
     async execute(_toolCallId, params, signal) {
@@ -77,19 +97,29 @@ export function registerCalendarWriteTool(pi: ExtensionAPI, ctx: IntegrationCont
   });
 }
 
+/** Collects optional event fields provided on a write tool call. */
+function pickOptionalEventFields(
+  params: Pick<CalendarWriteParams, 'description' | 'location' | 'reminderMinutes'>,
+): Pick<CreateEventInput, 'description' | 'location' | 'reminderMinutes'> {
+  const fields: Pick<CreateEventInput, 'description' | 'location' | 'reminderMinutes'> = {};
+
+  if (params.description !== undefined) {
+    fields.description = params.description;
+  }
+  if (params.location !== undefined) {
+    fields.location = params.location;
+  }
+  if (params.reminderMinutes !== undefined) {
+    fields.reminderMinutes = params.reminderMinutes;
+  }
+
+  return fields;
+}
+
 /** Dispatches a calendar write action and returns a plain-text summary. */
 async function runCalendarWriteAction(
   accessToken: string,
-  params: {
-    action: CalendarWriteAction;
-    eventId?: string;
-    summary?: string;
-    description?: string;
-    location?: string;
-    start?: string;
-    end?: string;
-    skipDuplicateCheck?: boolean;
-  },
+  params: CalendarWriteParams,
 ): Promise<string> {
   switch (params.action) {
     case 'create':
@@ -108,14 +138,7 @@ async function runCalendarWriteAction(
 /** Creates an event, reusing an existing match when found for idempotent retries. */
 async function createEvent(
   accessToken: string,
-  params: {
-    summary?: string;
-    description?: string;
-    location?: string;
-    start?: string;
-    end?: string;
-    skipDuplicateCheck?: boolean;
-  },
+  params: CalendarWriteParams,
 ): Promise<string> {
   if (params.summary === undefined || params.start === undefined || params.end === undefined) {
     return 'create requires summary, start, and end.';
@@ -140,8 +163,7 @@ async function createEvent(
     summary: params.summary,
     start: params.start,
     end: params.end,
-    ...(params.description !== undefined ? { description: params.description } : {}),
-    ...(params.location !== undefined ? { location: params.location } : {}),
+    ...pickOptionalEventFields(params),
   });
 
   return [
@@ -155,14 +177,7 @@ async function createEvent(
 /** Updates an event by id. */
 async function updateEvent(
   accessToken: string,
-  params: {
-    eventId?: string;
-    summary?: string;
-    description?: string;
-    location?: string;
-    start?: string;
-    end?: string;
-  },
+  params: CalendarWriteParams,
 ): Promise<string> {
   if (params.eventId === undefined) {
     return 'update requires eventId.';
@@ -170,9 +185,8 @@ async function updateEvent(
 
   const updated = await updateCalendarEvent(accessToken, {
     eventId: params.eventId,
+    ...pickOptionalEventFields(params),
     ...(params.summary !== undefined ? { summary: params.summary } : {}),
-    ...(params.description !== undefined ? { description: params.description } : {}),
-    ...(params.location !== undefined ? { location: params.location } : {}),
     ...(params.start !== undefined ? { start: params.start } : {}),
     ...(params.end !== undefined ? { end: params.end } : {}),
   });
@@ -183,7 +197,7 @@ async function updateEvent(
 /** Deletes an event by id. */
 async function deleteEvent(
   accessToken: string,
-  params: { eventId?: string },
+  params: Pick<CalendarWriteParams, 'eventId'>,
 ): Promise<string> {
   if (params.eventId === undefined) {
     return 'delete requires eventId.';

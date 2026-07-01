@@ -42,7 +42,7 @@ export const googleCalendarIntegration: IntegrationDefinition = {
     surface:
       'When the user asks about their schedule or availability, use calendar_read. If Google is not connected, share the connect URL from the tool result.',
     worker:
-      'Use calendar_write to create, update, or delete calendar events. Reuse event ids from prior tool results on retries to stay idempotent.',
+      'Use calendar_write to create, update, or delete calendar events. Reuse event ids from prior tool results on retries to stay idempotent. Set reminderMinutes when the user wants a popup reminder before an event.',
   },
   onProcessStartup: warmGoogleApisIfConfigured,
 };
