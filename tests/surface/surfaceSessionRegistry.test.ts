@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
-import { noopIntegrationStore } from '../../src/integrations/store/noopIntegrationStore.js';
+import { unconfiguredOAuthService } from '../../src/integrations/oauth/unconfiguredOAuthService.js';
+import { createEmptyIntegrationStore } from '../helpers/emptyIntegrationStore.js';
 import { createMockTaskQueue } from '../helpers/mockTaskQueue.js';
 
 const createSurfaceSessionMock = vi.fn<
@@ -28,11 +29,12 @@ function createRegistry(maxSessions: number) {
     authStorage: {} as never,
     modelRegistry: {} as never,
     model: {} as never,
-    surfaceAgentConfig: {} as never,
+    agentConfig: {} as never,
     taskQueue: createMockTaskQueue(),
     contextTurnLimit: 3,
     maxSessions,
-    integrationStore: noopIntegrationStore,
+    integrationStore: createEmptyIntegrationStore(),
+    oauthService: unconfiguredOAuthService,
   });
 }
 

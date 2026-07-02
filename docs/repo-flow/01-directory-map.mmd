@@ -18,7 +18,7 @@ flowchart TB
 
     env["env.ts<br/>PORT · DATA_ROOT · LOG_* · TIMEZONE<br/>TASK_CONTEXT_TURN_LIMIT"]
 
-    surfaceCfg["surfaceAgent.ts<br/>LLM base URL · model · thinking level"]
+    agentLlm["agentLlm.ts<br/>LLM base URL · model · thinking level · role config"]
 
   end
 
@@ -44,11 +44,11 @@ flowchart TB
 
     iface["respondService.ts<br/>RespondService interface"]
 
-    noop["noopRespondService.ts<br/>stub impl for tests"]
+    stubRespond["tests/helpers/stubRespondService.ts<br/>stub impl for route tests"]
 
     controller --> iface
 
-    iface -.-> noop
+    iface -.-> stubRespond
 
   end
 
@@ -172,7 +172,7 @@ flowchart TB
 
 
 
-  index --> env & surfaceCfg & buildServer & surfaceSvc & registry & taskQueue & rootLog
+  index --> env & agentLlm & buildServer & surfaceSvc & registry & taskQueue & rootLog
 
   buildServer --> controller
 

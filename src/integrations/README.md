@@ -208,7 +208,7 @@ No changes are needed in `createSurfaceSession`, `createWorkerSession`, or the e
 | `tests/integrations/registry.test.ts` | Registry still validates (implicit if you only add a valid integration) |
 | `tests/integrations/buildIntegrationSessionExtras.test.ts` | Per-role tool names and prompt fragments, if non-trivial |
 
-Use `noopIntegrationStore` when you need defaults, or a mock `IntegrationStore` to test enable/disable overrides.
+Use `createEmptyIntegrationStore()` from `tests/helpers/emptyIntegrationStore.ts` when you need defaults, or a mock `IntegrationStore` to test enable/disable overrides.
 
 ## `IntegrationDefinition` fields
 

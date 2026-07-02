@@ -10,6 +10,7 @@ import {
 } from '../../src/integrations/oauth/oauthService.js';
 import { OAuthStateError } from '../../src/integrations/oauth/oauthStateStore.js';
 import type { OAuthService } from '../../src/integrations/oauth/oauthService.js';
+import { buildTestServer } from '../helpers/buildTestServer.js';
 
 function createStubOAuthService(overrides: Partial<OAuthService> = {}): OAuthService {
   const start = vi.fn(() =>
@@ -54,8 +55,7 @@ describe('buildOAuthConnectedRedirectUrl', () => {
 
 describe('oauth routes', () => {
   async function createApp(oauthService: OAuthService) {
-    const { buildServer } = await import('../../src/server/buildServer.js');
-    return buildServer({
+    return buildTestServer({
       oauthService,
       requestIdFactory: () => 'req_test00000001',
     });
@@ -381,8 +381,7 @@ describe('oauth routes', () => {
   });
 
   it('does not register oauth routes when oauthService is omitted', async () => {
-    const { buildServer } = await import('../../src/server/buildServer.js');
-    const app = buildServer({
+    const app = buildTestServer({
       requestIdFactory: () => 'req_test00000001',
     });
 

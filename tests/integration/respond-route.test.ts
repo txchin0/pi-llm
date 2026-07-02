@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
+import { buildTestServer } from '../helpers/buildTestServer.js';
 
 type ParsedSseEvent = {
   event: string;
@@ -26,8 +27,7 @@ function parseSsePayload(payload: string): ParsedSseEvent[] {
 
 describe('POST /v1/respond', () => {
   async function createApp() {
-    const { buildServer } = await import('../../src/server/buildServer.js');
-    return buildServer({
+    return buildTestServer({
       now: () => '2026-06-09T12:00:00.000Z',
       requestIdFactory: () => 'req_test00000001',
       sessionIdFactory: () => 'sess_test00000001',
@@ -126,13 +126,12 @@ describe('POST /v1/respond', () => {
   });
 
   it('streams start then provider_error when surface session creation fails', async () => {
-    const { buildServer } = await import('../../src/server/buildServer.js');
     const { createSurfaceRespondService } = await import(
       '../../src/surface/surfaceRespondService.js'
     );
     const providerError = 'Cannot reach Surface LLM at http://127.0.0.1:8080';
 
-    const app = buildServer({
+    const app = buildTestServer({
       service: createSurfaceRespondService({
         registry: {
           getOrCreate: () => Promise.reject(new Error(providerError)),

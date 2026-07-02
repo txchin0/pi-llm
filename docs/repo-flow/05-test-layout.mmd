@@ -7,7 +7,7 @@ flowchart LR
     T4["agent/runAgentPrompt"]
     T5["integration/respond-route"]
     T6["contracts/respond"]
-    T7["config/surfaceAgent"]
+    T7["config/roleAgent"]
     T8["logging/createRootLogger"]
   end
 
@@ -18,7 +18,7 @@ flowchart LR
     S4["runAgentPrompt"]
     S5["POST /v1/respond"]
     S6["contracts/respond"]
-    S7["surfaceAgent config"]
+    S7["agentLlm role config"]
     S8["createRootLogger"]
   end
 

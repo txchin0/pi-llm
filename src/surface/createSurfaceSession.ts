@@ -5,11 +5,11 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 
 import { buildRoleAgentSession } from '../agent/buildRoleAgentSession.js';
-import { validateAgentLlmEndpoint } from '../config/agentLlm.js';
-import type {
-  SurfaceAgentConfig,
-  SurfaceModel,
-} from '../config/surfaceAgent.js';
+import {
+  validateAgentLlmEndpoint,
+  type AgentLlmConfig,
+  type AgentModel,
+} from '../config/agentLlm.js';
 import type { SessionId } from '../contracts/respond.js';
 import { SURFACE_BASE_TOOLS } from '../integrations/baseTools.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
@@ -28,14 +28,14 @@ export type CreateSurfaceSessionOptions = {
   sessionId: SessionId;
   userMemoryWorkspace: string;
   dataRoot: string;
-  model: SurfaceModel;
+  model: AgentModel;
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
-  surfaceAgentConfig: SurfaceAgentConfig;
+  agentConfig: AgentLlmConfig;
   taskQueue: TaskQueue;
   contextTurnLimit: number;
   enabledIntegrations: EnabledIntegration[];
-  oauthService?: OAuthService;
+  oauthService: OAuthService;
   log?: AppLogger;
 };
 
@@ -66,7 +66,7 @@ function buildSurfaceExtensionDependencies(
 export async function createSurfaceSession(
   options: CreateSurfaceSessionOptions,
 ): Promise<AgentSession> {
-  await validateAgentLlmEndpoint(options.surfaceAgentConfig, 'surface');
+  await validateAgentLlmEndpoint(options.agentConfig, 'surface');
 
   return buildRoleAgentSession({
     userId: options.userId,
@@ -75,10 +75,10 @@ export async function createSurfaceSession(
     model: options.model,
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
-    thinkingLevel: options.surfaceAgentConfig.thinkingLevel,
+    thinkingLevel: options.agentConfig.thinkingLevel,
     role: 'surface',
     enabledIntegrations: options.enabledIntegrations,
-    ...(options.oauthService !== undefined ? { oauthService: options.oauthService } : {}),
+    oauthService: options.oauthService,
     ...(options.log !== undefined ? { log: options.log } : {}),
     spec: {
       baseTools: SURFACE_BASE_TOOLS,

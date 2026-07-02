@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { noopIntegrationStore } from '../../src/integrations/store/noopIntegrationStore.js';
+import { unconfiguredOAuthService } from '../../src/integrations/oauth/unconfiguredOAuthService.js';
 import type { TaskRecord } from '../../src/queue/taskTypes.js';
 import { buildWorkerTaskPrompt } from '../../src/worker/buildWorkerTaskPrompt.js';
 import {
@@ -10,6 +10,7 @@ import {
   type WorkerTraceFactory,
 } from '../../src/worker/workerTaskService.js';
 import type { WorkerRunTraceSink } from '../../src/worker/workerRunTrace.js';
+import { createEmptyIntegrationStore } from '../helpers/emptyIntegrationStore.js';
 
 describe('createWorkerTaskService', () => {
   it('builds a prompt with description, context turns, and current time', async () => {
@@ -42,8 +43,9 @@ describe('createWorkerTaskService', () => {
       authStorage: {} as never,
       modelRegistry: {} as never,
       model: {} as never,
-      workerAgentConfig: {} as never,
-      integrationStore: noopIntegrationStore,
+      agentConfig: {} as never,
+      integrationStore: createEmptyIntegrationStore(),
+      oauthService: unconfiguredOAuthService,
       now: () => '2026-01-01T12:00:00.000+11:00',
       createSession,
       runPrompt,
@@ -82,8 +84,9 @@ describe('createWorkerTaskService', () => {
       authStorage: {} as never,
       modelRegistry: {} as never,
       model: {} as never,
-      workerAgentConfig: {} as never,
-      integrationStore: noopIntegrationStore,
+      agentConfig: {} as never,
+      integrationStore: createEmptyIntegrationStore(),
+      oauthService: unconfiguredOAuthService,
       createSession: vi
         .fn()
         .mockResolvedValue({ prompt: vi.fn() }) as WorkerSessionFactory,
@@ -128,8 +131,9 @@ describe('createWorkerTaskService', () => {
       authStorage: {} as never,
       modelRegistry: {} as never,
       model: {} as never,
-      workerAgentConfig: {} as never,
-      integrationStore: noopIntegrationStore,
+      agentConfig: {} as never,
+      integrationStore: createEmptyIntegrationStore(),
+      oauthService: unconfiguredOAuthService,
       now: () => '2026-01-01T12:00:00.000+11:00',
       createSession: vi
         .fn()
@@ -151,8 +155,9 @@ describe('createWorkerTaskService', () => {
       authStorage: {} as never,
       modelRegistry: {} as never,
       model: {} as never,
-      workerAgentConfig: {} as never,
-      integrationStore: noopIntegrationStore,
+      agentConfig: {} as never,
+      integrationStore: createEmptyIntegrationStore(),
+      oauthService: unconfiguredOAuthService,
       now: () => '2026-01-01T12:00:00.000+11:00',
       createSession: vi
         .fn()

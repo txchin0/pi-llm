@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveEnabledIntegrations } from '../../src/integrations/resolveEnabledIntegrations.js';
-import { noopIntegrationStore } from '../../src/integrations/store/noopIntegrationStore.js';
 import type { IntegrationStore } from '../../src/integrations/store/integrationStore.js';
+import { createEmptyIntegrationStore } from '../helpers/emptyIntegrationStore.js';
 
 describe('resolveEnabledIntegrations', () => {
-  it('enables web_search by default under the noop store', async () => {
-    const enabled = await resolveEnabledIntegrations(noopIntegrationStore, 'user-a');
+  it('enables web_search by default under an empty store', async () => {
+    const enabled = await resolveEnabledIntegrations(createEmptyIntegrationStore(), 'user-a');
     expect(enabled.map((entry) => entry.definition.id)).toEqual(['web_search']);
   });
 

@@ -9,6 +9,7 @@ import {
 } from '../../src/contracts/integrations.js';
 import { createFileIntegrationStore } from '../../src/integrations/store/fileIntegrationStore.js';
 import { resolveUserIntegrationsPath } from '../../src/integrations/store/resolveUserIntegrationsPath.js';
+import { buildTestServer } from '../helpers/buildTestServer.js';
 
 describe('integrations routes', () => {
   let tempDir: string;
@@ -24,9 +25,8 @@ describe('integrations routes', () => {
   });
 
   async function createApp() {
-    const { buildServer } = await import('../../src/server/buildServer.js');
     const integrationStore = createFileIntegrationStore({ dataRoot });
-    return buildServer({
+    return buildTestServer({
       integrationStore,
       requestIdFactory: () => 'req_test00000001',
     });
@@ -77,8 +77,7 @@ describe('integrations routes', () => {
       config: { apiKey: 'secret' },
     });
 
-    const { buildServer } = await import('../../src/server/buildServer.js');
-    const app = buildServer({
+    const app = buildTestServer({
       integrationStore,
       requestIdFactory: () => 'req_test00000001',
     });

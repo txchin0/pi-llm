@@ -2,14 +2,13 @@ import type { AuthStorage, AgentSession, AgentSessionEvent, ModelRegistry } from
 
 import { extractAssistantOutcome } from '../agent/extractAssistantOutcome.js';
 import { runAgentPrompt } from '../agent/runAgentPrompt.js';
-import { resolveUserMemoryWorkspace } from '../config/agentLlm.js';
-import type {
-  WorkerAgentConfig,
-  WorkerModel,
-} from '../config/workerAgent.js';
+import {
+  resolveUserMemoryWorkspace,
+  type AgentLlmConfig,
+  type AgentModel,
+} from '../config/agentLlm.js';
 import type { AppLogger } from '../logging/types.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
-import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
 import type { TaskRecord } from '../queue/taskTypes.js';
@@ -42,10 +41,10 @@ export type WorkerTaskServiceDependencies = {
   dataRoot: string;
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
-  model: WorkerModel;
-  workerAgentConfig: WorkerAgentConfig;
+  model: AgentModel;
+  agentConfig: AgentLlmConfig;
   integrationStore: IntegrationStore;
-  oauthService?: OAuthService;
+  oauthService: OAuthService;
   logger?: AppLogger;
   now?: () => string;
   createSession?: WorkerSessionFactory;
@@ -151,7 +150,6 @@ export function createWorkerTaskService(
 ): WorkerTaskService {
   const createSession = dependencies.createSession ?? createWorkerSession;
   const runPrompt = dependencies.runPrompt ?? runWorkerPrompt;
-  const oauthService = dependencies.oauthService ?? noopOAuthService;
 
   return {
     async runTask(task, signal) {
@@ -184,9 +182,9 @@ export function createWorkerTaskService(
         model: dependencies.model,
         authStorage: dependencies.authStorage,
         modelRegistry: dependencies.modelRegistry,
-        workerAgentConfig: dependencies.workerAgentConfig,
+        agentConfig: dependencies.agentConfig,
         enabledIntegrations,
-        oauthService,
+        oauthService: dependencies.oauthService,
       };
 
       const session = await createSession(

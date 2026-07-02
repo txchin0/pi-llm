@@ -9,6 +9,7 @@ import { ListTasksResponseSchema } from '../../src/contracts/tasks.js';
 import { resolveMigrationsFolder } from '../../src/queue/resolveMigrationsFolder.js';
 import { createSqliteTaskQueue } from '../../src/queue/sqliteTaskQueue.js';
 import type { TaskStatus } from '../../src/queue/taskTypes.js';
+import { buildTestServer } from '../helpers/buildTestServer.js';
 
 function setTaskStatus(dbPath: string, taskId: string, status: TaskStatus): void {
   const db = new Database(dbPath);
@@ -36,8 +37,7 @@ describe('GET /v1/tasks', () => {
   });
 
   async function createApp() {
-    const { buildServer } = await import('../../src/server/buildServer.js');
-    return buildServer({
+    return buildTestServer({
       taskQueue: queue,
       requestIdFactory: () => 'req_test00000001',
     });

@@ -5,8 +5,13 @@ import {
   type OAuthStatus,
 } from './oauthService.js';
 
-/** OAuth service stub used when no OAuth provider is configured. */
-export const noopOAuthService: OAuthService = {
+/**
+ * OAuth adapter for deployments without an OAuth provider configured.
+ *
+ * Selected once at bootstrap; every other module requires an OAuthService
+ * so a missing wire is a compile error rather than a silent degrade.
+ */
+export const unconfiguredOAuthService: OAuthService = {
   /** Reports the provider as not configured. */
   start(_userId, providerId): Promise<OAuthStartResult> {
     return Promise.resolve({

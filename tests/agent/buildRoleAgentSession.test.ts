@@ -48,6 +48,7 @@ vi.mock('@earendil-works/pi-coding-agent', () => ({
 
 import { buildRoleAgentSession } from '../../src/agent/buildRoleAgentSession.js';
 import { SURFACE_BASE_TOOLS, WORKER_BASE_TOOLS } from '../../src/integrations/baseTools.js';
+import { unconfiguredOAuthService } from '../../src/integrations/oauth/unconfiguredOAuthService.js';
 import { createRootLogger } from '../../src/logging/createRootLogger.js';
 
 const baseOptions = {
@@ -59,6 +60,7 @@ const baseOptions = {
   modelRegistry: {} as never,
   thinkingLevel: 'off' as const,
   enabledIntegrations: [],
+  oauthService: unconfiguredOAuthService,
 };
 
 describe('buildRoleAgentSession', () => {

@@ -4,14 +4,13 @@ import type {
   ModelRegistry,
 } from '@earendil-works/pi-coding-agent';
 
-import { resolveUserMemoryWorkspace } from '../config/agentLlm.js';
-import type {
-  SurfaceAgentConfig,
-  SurfaceModel,
-} from '../config/surfaceAgent.js';
+import {
+  resolveUserMemoryWorkspace,
+  type AgentLlmConfig,
+  type AgentModel,
+} from '../config/agentLlm.js';
 import type { SessionId } from '../contracts/respond.js';
 import { resolveEnabledIntegrations } from '../integrations/resolveEnabledIntegrations.js';
-import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
 import type { AppLogger } from '../logging/types.js';
@@ -22,13 +21,13 @@ export type SurfaceSessionRegistryDependencies = {
   dataRoot: string;
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
-  model: SurfaceModel;
-  surfaceAgentConfig: SurfaceAgentConfig;
+  model: AgentModel;
+  agentConfig: AgentLlmConfig;
   taskQueue: TaskQueue;
   contextTurnLimit: number;
   maxSessions: number;
   integrationStore: IntegrationStore;
-  oauthService?: OAuthService;
+  oauthService: OAuthService;
   log?: AppLogger;
 };
 
@@ -38,8 +37,8 @@ export class SurfaceSessionRegistry {
   private readonly dataRoot: string;
   private readonly authStorage: AuthStorage;
   private readonly modelRegistry: ModelRegistry;
-  private readonly model: SurfaceModel;
-  private readonly surfaceAgentConfig: SurfaceAgentConfig;
+  private readonly model: AgentModel;
+  private readonly agentConfig: AgentLlmConfig;
   private readonly taskQueue: TaskQueue;
   private readonly contextTurnLimit: number;
   private readonly maxSessions: number;
@@ -53,12 +52,12 @@ export class SurfaceSessionRegistry {
     this.authStorage = dependencies.authStorage;
     this.modelRegistry = dependencies.modelRegistry;
     this.model = dependencies.model;
-    this.surfaceAgentConfig = dependencies.surfaceAgentConfig;
+    this.agentConfig = dependencies.agentConfig;
     this.taskQueue = dependencies.taskQueue;
     this.contextTurnLimit = dependencies.contextTurnLimit;
     this.maxSessions = dependencies.maxSessions;
     this.integrationStore = dependencies.integrationStore;
-    this.oauthService = dependencies.oauthService ?? noopOAuthService;
+    this.oauthService = dependencies.oauthService;
     this.log = dependencies.log;
   }
 
@@ -86,7 +85,7 @@ export class SurfaceSessionRegistry {
       model: this.model,
       authStorage: this.authStorage,
       modelRegistry: this.modelRegistry,
-      surfaceAgentConfig: this.surfaceAgentConfig,
+      agentConfig: this.agentConfig,
       taskQueue: this.taskQueue,
       contextTurnLimit: this.contextTurnLimit,
       enabledIntegrations,

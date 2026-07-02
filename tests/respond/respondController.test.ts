@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { RespondSseEvent } from '../../src/contracts/respond.js';
 import { RespondController } from '../../src/respond/respondController.js';
 import type { RespondService } from '../../src/respond/respondService.js';
+import { createStubRespondService } from '../helpers/stubRespondService.js';
 
 async function collectEvents(
   controller: RespondController,
@@ -20,6 +21,7 @@ async function collectEvents(
 describe('RespondController', () => {
   it('yields validation_error for invalid requests', async () => {
     const controller = new RespondController({
+      service: createStubRespondService(),
       now: () => '2026-06-09T12:00:00.000Z',
     });
 
@@ -72,6 +74,7 @@ describe('RespondController', () => {
 
   it('reuses a supplied session_id in the start event', async () => {
     const controller = new RespondController({
+      service: createStubRespondService(),
       now: () => '2026-06-09T12:00:00.000Z',
     });
 

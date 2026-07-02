@@ -138,6 +138,44 @@ export function resolveAgentThinkingLevel(
   return thinkingLevel;
 }
 
+const ROLE_ENV_SPECS: Record<AgentLlmRole, LoadAgentLlmConfigOptions> = {
+  surface: {
+    prefix: 'SURFACE',
+    defaults: { thinkingEnabled: false, thinkingLevel: 'low' },
+  },
+  worker: {
+    prefix: 'WORKER',
+    defaults: { thinkingEnabled: true, thinkingLevel: 'low' },
+  },
+};
+
+/**
+ * Loads one role's agent LLM configuration from the environment.
+ *
+ * Owns the role-to-env-prefix mapping (`SURFACE_*` / `WORKER_*`) and
+ * per-role thinking defaults; callers only name the role.
+ */
+export function loadRoleAgentConfig(
+  role: AgentLlmRole,
+  env: NodeJS.ProcessEnv = process.env,
+): AgentLlmConfig {
+  return loadAgentLlmConfig(ROLE_ENV_SPECS[role], env);
+}
+
+/**
+ * Loads role config and builds auth, registry, model, and endpoint helpers.
+ *
+ * Callers name the role once; env prefix and thinking defaults come from
+ * {@link loadRoleAgentConfig}.
+ */
+export function createRoleAgentLlmRuntime(role: AgentLlmRole) {
+  const config = loadRoleAgentConfig(role);
+  return {
+    config,
+    ...createAgentLlmRuntime(config, { role }),
+  };
+}
+
 /** Loads agent LLM configuration from prefixed environment variables. */
 export function loadAgentLlmConfig(
   options: LoadAgentLlmConfigOptions,

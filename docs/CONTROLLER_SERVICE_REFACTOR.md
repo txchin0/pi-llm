@@ -2,7 +2,7 @@
 
 This document describes a proposed restructuring of the respond path in pi-llm. The goal is to align the codebase with a **controller–service–runner** pattern: clear boundaries, predictable naming, and room to add the worker agent and task queue without tangling Pi SDK mechanics into business logic.
 
-**Status:** Implemented.
+**Status:** Implemented. Subsequent cleanup removed production noop defaults; route tests use `tests/helpers/buildTestServer.ts` with explicit stub dependencies.
 
 **Layout:** `src/agent/`, `src/respond/`, `src/surface/` (see §5).
 
@@ -21,7 +21,7 @@ This document describes a proposed restructuring of the respond path in pi-llm. 
 | Pi runner | Subscribe, prompt, event queue, unsubscribe | `src/agent/runAgentPrompt.ts` |
 | Repository | Long-lived sessions keyed by `session_id` | `src/surface/surfaceSessionRegistry.ts` |
 | Agent factory | Pi harness setup (tools, cwd, system prompt) | `src/surface/createSurfaceSession.ts` |
-| Test double | No-op service for default `buildServer()` | `src/respond/noopRespondService.ts` |
+| Test double | Stub respond service for route tests | `tests/helpers/stubRespondService.ts` via `tests/helpers/buildTestServer.ts` |
 
 Renaming, folder restructure, and runner extraction. No change to the HTTP contract (`POST /v1/respond` SSE events) or to `DESIGN.md` architecture.
 
@@ -564,7 +564,7 @@ Execute in order to keep the app runnable after each step.
 
 ### 9.1 Existing tests
 
-Integration tests in `tests/integration/respond-route.test.ts` use `buildServer()` without a service override → `noopRespondService` → only `start` events. **No behavior change** if noop stays the default.
+Integration tests use `buildTestServer()` from `tests/helpers/buildTestServer.ts`, which supplies `createStubRespondService()` plus stub task queue and integration store. Override `service` when testing production respond paths (for example `createSurfaceRespondService` with a mock registry).
 
 ### 9.2 New tests to add (recommended)
 

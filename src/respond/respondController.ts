@@ -8,7 +8,6 @@ import {
   logInboundMessage,
   type AppLogger,
 } from '../logging/index.js';
-import { noopRespondService } from './noopRespondService.js';
 import type { RespondService } from './respondService.js';
 import {
   toRespondErrorEvent,
@@ -16,7 +15,7 @@ import {
 } from './toRespondErrorEvent.js';
 
 export type RespondControllerDependencies = {
-  service?: RespondService;
+  service: RespondService;
   logger?: AppLogger;
   now?: () => string;
   requestIdFactory?: () => RequestId;
@@ -46,9 +45,9 @@ export class RespondController {
   private readonly requestIdFactory: () => RequestId;
   private readonly sessionIdFactory: () => SessionId;
 
-  /** Creates a controller with optional clock, id factories, and respond service. */
-  constructor(dependencies: RespondControllerDependencies = {}) {
-    this.service = dependencies.service ?? noopRespondService;
+  /** Creates a controller with a respond service and optional clock and id factories. */
+  constructor(dependencies: RespondControllerDependencies) {
+    this.service = dependencies.service;
     this.logger = dependencies.logger ?? createRootLogger();
     this.now = dependencies.now ?? (() => new Date().toISOString());
     this.requestIdFactory =

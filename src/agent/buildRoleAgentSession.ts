@@ -13,7 +13,6 @@ import {
 import type { AgentLlmRole, AgentModel, AgentPiThinkingLevel } from '../config/agentLlm.js';
 import { assertToolAllowlistSync } from '../integrations/assertToolAllowlistSync.js';
 import { buildIntegrationSessionExtras } from '../integrations/buildIntegrationSessionExtras.js';
-import { noopOAuthService } from '../integrations/oauth/noopOAuthService.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { EnabledIntegration } from '../integrations/types.js';
 import type { AppLogger } from '../logging/types.js';
@@ -43,7 +42,7 @@ export type BuildRoleAgentSessionOptions = {
   thinkingLevel: AgentPiThinkingLevel;
   role: AgentLlmRole;
   enabledIntegrations: EnabledIntegration[];
-  oauthService?: OAuthService;
+  oauthService: OAuthService;
   log?: AppLogger;
   spec: AgentSessionRoleSpec;
 };
@@ -63,7 +62,7 @@ export async function buildRoleAgentSession(
     options.role,
     {
       userId: options.userId,
-      oauthService: options.oauthService ?? noopOAuthService,
+      oauthService: options.oauthService,
       ...(options.log !== undefined ? { log: options.log } : {}),
     },
   );

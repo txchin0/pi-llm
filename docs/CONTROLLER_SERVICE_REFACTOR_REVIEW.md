@@ -17,7 +17,7 @@ Every factual claim in the proposal was verified against the codebase. All check
 | `surfaceRespondHandler.ts` mixes service + runner concerns | ✅ | `streamSurfacePrompt` holds session lookup + `session_busy` **and** `subscribe`/queue/`waitForNextTick`/`unsubscribe` |
 | Double validation | ✅ | `respond.ts:19-22` (`prepareRespondPayload`) and `respondOrchestrator.ts:86` both `safeParse` |
 | Stale stub comment | ✅ | `stubRespondHandler.ts:3` "until the Pi surface agent is wired in" while `index.ts:32` wires the real handler |
-| `noopRespondService` default keeps integration tests green | ✅ | `respond-route.test.ts` calls `buildServer()` with no handler → only `start`/`validation_error` asserted |
+| Integration test wiring | ✅ (updated) | Route tests use `buildTestServer()` with `createStubRespondService()`; `buildServer()` requires explicit `service`, `taskQueue`, and `integrationStore` |
 | `PI_SDK_REPORT.md` references the old names | ✅ | lines 941, 988–990, 1089 reference `respondOrchestrator.ts` / `RespondHandler` / `respondHandoff.ts` |
 | `enrichUserMessage`, `mapPiEventToRespond`, registry, factory unchanged | ✅ | `enrichUserMessage` now lives in `src/agent/piMessageText.ts`; signatures are unaffected |
 
@@ -88,7 +88,7 @@ The doc labels both `respond.ts` ("HTTP controller") and `RespondController` ("a
 ## 4. Migration-order notes
 
 - **Phase 1 interaction with §11.** During Phase 1 the runner re-throws and the *existing* `streamSurfacePrompt` catch still maps the error — consistent, no gap. The error-mapping-in-service decision only fully lands in Phase 3 when the handler is slimmed. Worth a one-line note so the implementer doesn't try to move the catch in Phase 1.
-- **Add a `runtime/respond` index or keep flat?** Not required, but with `respondController.ts`, `respondService.ts`, `noopRespondService.ts` all landing in `runtime/`, a short barrel could reduce import churn in `buildServer.ts`/`index.ts`. Optional.
+- **Add a `runtime/respond` index or keep flat?** Not required, but with `respondController.ts`, `respondService.ts`, and test stubs in `tests/helpers/stubRespondService.ts` all related to the respond path, a short barrel could reduce import churn in `buildServer.ts`/`index.ts`. Optional.
 - **`PI_SDK_REPORT.md` §19** is already on the touch list — good. It's a code sketch doc, so updating symbol names there is low effort.
 
 ---

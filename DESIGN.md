@@ -539,7 +539,7 @@ Structured logs for chat requests, tool invocations, task state transitions, and
 
 Environment-driven settings: idle timeout, retry limits, model ids, data root path, provider selection for calendar and search, `TASK_CONTEXT_TURN_LIMIT` (conversation turns snapshotted into queued tasks, default 3), `SURFACE_SESSION_CACHE_LIMIT` (max cached surface sessions before LRU eviction of idle sessions, default 50).
 
-**Surface LLM health checks (intentional duplication):** bootstrap logs a warning via `createSurfaceLlmRuntime().warnEndpoint()` when the configured model endpoint is unreachable; each new surface session also calls `validateAgentLlmEndpoint(config, 'surface')` and fails fast if the endpoint is down. Startup warning aids ops visibility; per-session validation catches endpoint drift between server start and first use of a new `session_id`.
+**Surface LLM health checks (intentional duplication):** bootstrap logs a warning via `createRoleAgentLlmRuntime('surface').warnEndpoint()` when the configured model endpoint is unreachable; each new surface session also calls `validateAgentLlmEndpoint(config, 'surface')` and fails fast if the endpoint is down. Startup warning aids ops visibility; per-session validation catches endpoint drift between server start and first use of a new `session_id`.
 
 ---
 

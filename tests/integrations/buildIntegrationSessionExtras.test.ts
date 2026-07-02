@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { buildIntegrationSessionExtras } from '../../src/integrations/buildIntegrationSessionExtras.js';
 import type { OAuthService } from '../../src/integrations/oauth/oauthService.js';
-import { noopOAuthService } from '../../src/integrations/oauth/noopOAuthService.js';
+import { unconfiguredOAuthService } from '../../src/integrations/oauth/unconfiguredOAuthService.js';
 import { resolveEnabledIntegrations } from '../../src/integrations/resolveEnabledIntegrations.js';
-import { noopIntegrationStore } from '../../src/integrations/store/noopIntegrationStore.js';
 import type { IntegrationContext, IntegrationDefinition } from '../../src/integrations/types.js';
+import { createEmptyIntegrationStore } from '../helpers/emptyIntegrationStore.js';
 
 const sessionShutdown = vi.fn(() => undefined);
 const processShutdown = vi.fn(() => undefined);
@@ -108,7 +108,7 @@ function createStubOAuthService(): OAuthService & {
   };
 }
 
-const extrasInput = (userId: string, oauthService: OAuthService = noopOAuthService) => ({
+const extrasInput = (userId: string, oauthService: OAuthService = unconfiguredOAuthService) => ({
   userId,
   oauthService,
 });
@@ -131,7 +131,7 @@ describe('buildIntegrationSessionExtras', () => {
   });
 
   it('includes web_search for both roles when enabled by default', async () => {
-    const enabled = await resolveEnabledIntegrations(noopIntegrationStore, 'user-a');
+    const enabled = await resolveEnabledIntegrations(createEmptyIntegrationStore(), 'user-a');
     const surfaceExtras = buildIntegrationSessionExtras(
       enabled,
       'surface',

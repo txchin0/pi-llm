@@ -7,9 +7,7 @@ import {
   createRootLogger,
   type AppLogger,
 } from '../logging/index.js';
-import { noopTaskQueue } from '../queue/noopTaskQueue.js';
 import type { TaskQueue } from '../queue/taskQueue.js';
-import { noopIntegrationStore } from '../integrations/store/noopIntegrationStore.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
 import { OAuthController } from '../integrations/oauth/oauthController.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
@@ -28,17 +26,17 @@ import { registerTasksRoute } from './routes/tasks.js';
 
 export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
-  taskQueue?: TaskQueue;
-  integrationStore?: IntegrationStore;
+  taskQueue: TaskQueue;
+  integrationStore: IntegrationStore;
   oauthService?: OAuthService;
 };
 
 /** Creates a Fastify instance with respond, tasks, and integrations routes. */
-export function buildServer(options: BuildServerOptions = {}) {
+export function buildServer(options: BuildServerOptions) {
   const {
     logger = createRootLogger(),
-    taskQueue = noopTaskQueue,
-    integrationStore = noopIntegrationStore,
+    taskQueue,
+    integrationStore,
     oauthService,
     ...controllerOptions
   } = options;

@@ -1,10 +1,7 @@
 import type { AgentSession, AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent';
 
 import { buildRoleAgentSession } from '../agent/buildRoleAgentSession.js';
-import type {
-  WorkerAgentConfig,
-  WorkerModel,
-} from '../config/workerAgent.js';
+import type { AgentLlmConfig, AgentModel } from '../config/agentLlm.js';
 import { WORKER_BASE_TOOLS } from '../integrations/baseTools.js';
 import type { OAuthService } from '../integrations/oauth/oauthService.js';
 import type { EnabledIntegration } from '../integrations/types.js';
@@ -16,12 +13,12 @@ export type CreateWorkerSessionOptions = {
   userId: string;
   userMemoryWorkspace: string;
   dataRoot: string;
-  model: WorkerModel;
+  model: AgentModel;
   authStorage: AuthStorage;
   modelRegistry: ModelRegistry;
-  workerAgentConfig: WorkerAgentConfig;
+  agentConfig: AgentLlmConfig;
   enabledIntegrations: EnabledIntegration[];
-  oauthService?: OAuthService;
+  oauthService: OAuthService;
   log?: AppLogger;
 };
 
@@ -40,10 +37,10 @@ export async function createWorkerSession(
     model: options.model,
     authStorage: options.authStorage,
     modelRegistry: options.modelRegistry,
-    thinkingLevel: options.workerAgentConfig.thinkingLevel,
+    thinkingLevel: options.agentConfig.thinkingLevel,
     role: 'worker',
     enabledIntegrations: options.enabledIntegrations,
-    ...(options.oauthService !== undefined ? { oauthService: options.oauthService } : {}),
+    oauthService: options.oauthService,
     ...(options.log !== undefined ? { log: options.log } : {}),
     spec: {
       baseTools: WORKER_BASE_TOOLS,

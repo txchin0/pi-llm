@@ -2,19 +2,12 @@ import { mkdir } from 'node:fs/promises';
 
 import type { FastifyInstance } from 'fastify';
 
+import { createRoleAgentLlmRuntime } from './config/agentLlm.js';
 import { env } from './config/env.js';
 import { parseGoogleOAuthConfig } from './config/googleOAuth.js';
-import {
-  createSurfaceLlmRuntime,
-  surfaceAgentConfig,
-} from './config/surfaceAgent.js';
-import {
-  createWorkerLlmRuntime,
-  workerAgentConfig,
-} from './config/workerAgent.js';
 import { collectProcessShutdownHooks, collectProcessStartupHooks, validateRegistry } from './integrations/registry.js';
 import { createFileOAuthTokenStore } from './integrations/oauth/fileOAuthTokenStore.js';
-import { noopOAuthService } from './integrations/oauth/noopOAuthService.js';
+import { unconfiguredOAuthService } from './integrations/oauth/unconfiguredOAuthService.js';
 import { createOAuthService } from './integrations/oauth/oauthService.js';
 import { getOAuthProvider } from './integrations/oauth/oauthProviderRegistry.js';
 import { createFileIntegrationStore } from './integrations/store/fileIntegrationStore.js';
@@ -53,9 +46,9 @@ export async function startServer(): Promise<void> {
           getOAuthProvider,
           log: createChildLogger(logger, { component: 'oauth' }),
         })
-      : noopOAuthService;
+      : unconfiguredOAuthService;
 
-  const surfaceLlm = createSurfaceLlmRuntime(surfaceAgentConfig);
+  const surfaceLlm = createRoleAgentLlmRuntime('surface');
   await surfaceLlm.warnEndpoint(
     createChildLogger(logger, { component: 'surface' }),
   );
@@ -82,7 +75,7 @@ export async function startServer(): Promise<void> {
     authStorage: surfaceLlm.authStorage,
     modelRegistry: surfaceLlm.modelRegistry,
     model: surfaceLlm.model,
-    surfaceAgentConfig,
+    agentConfig: surfaceLlm.config,
     taskQueue,
     contextTurnLimit: env.TASK_CONTEXT_TURN_LIMIT,
     maxSessions: env.SURFACE_SESSION_CACHE_LIMIT,
@@ -102,7 +95,7 @@ export async function startServer(): Promise<void> {
 
   let workerLoop: WorkerLoop | undefined;
   if (env.WORKER_ENABLED) {
-    const workerLlm = createWorkerLlmRuntime(workerAgentConfig);
+    const workerLlm = createRoleAgentLlmRuntime('worker');
     await workerLlm.warnEndpoint(
       createChildLogger(logger, { component: 'worker' }),
     );
@@ -114,7 +107,7 @@ export async function startServer(): Promise<void> {
       authStorage: workerLlm.authStorage,
       modelRegistry: workerLlm.modelRegistry,
       model: workerLlm.model,
-      workerAgentConfig,
+      agentConfig: workerLlm.config,
       integrationStore,
       oauthService,
       logger: workerLog,

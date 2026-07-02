@@ -1,3 +1,4 @@
+import type { calendar_v3 } from 'googleapis';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -266,7 +267,7 @@ describe('calendar API wrappers', () => {
             useDefault: false,
             overrides: [{ method: 'popup', minutes: 30 }],
           },
-        }),
+        }) as calendar_v3.Schema$Event,
       }),
     );
   });
@@ -301,8 +302,8 @@ describe('calendar API wrappers', () => {
     expect(insertMock).toHaveBeenCalledWith(
       expect.objectContaining({
         requestBody: expect.not.objectContaining({
-          reminders: expect.anything(),
-        }),
+          reminders: expect.anything() as calendar_v3.Schema$Event['reminders'],
+        }) as calendar_v3.Schema$Event,
       }),
     );
   });
@@ -375,7 +376,7 @@ describe('calendar API wrappers', () => {
             useDefault: false,
             overrides: [],
           },
-        }),
+        }) as calendar_v3.Schema$Event,
       }),
     );
   });
