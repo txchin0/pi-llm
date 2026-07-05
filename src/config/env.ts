@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 
-import { parseBoolean, parsePositiveInt } from './parseEnv.js';
+import { parseBoolean, parseCsvList, parsePositiveInt } from './parseEnv.js';
 
 const DEFAULT_TIMEZONE = 'Australia/Sydney';
 
@@ -135,6 +135,9 @@ export const env = {
     process.env.WORKER_RUN_TRACE,
     nodeEnv === 'development',
   ),
+  CORS_ALLOWED_ORIGINS: parseCsvList(process.env.CORS_ALLOWED_ORIGINS, [
+    'http://localhost',
+  ]),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
   isProd: nodeEnv === 'production',

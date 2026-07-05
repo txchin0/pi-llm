@@ -44,3 +44,20 @@ export function parseNonEmptyString(
   const trimmed = value?.trim();
   return trimmed && trimmed.length > 0 ? trimmed : defaultValue;
 }
+
+/** Parses a comma-separated list of trimmed non-empty strings, or returns the fallback. */
+export function parseCsvList(
+  value: string | undefined,
+  fallback: readonly string[],
+): string[] {
+  if (value === undefined || value.trim() === '') {
+    return [...fallback];
+  }
+
+  const items = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+
+  return items.length > 0 ? items : [...fallback];
+}

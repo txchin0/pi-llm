@@ -179,4 +179,46 @@ describe('POST /v1/respond', () => {
 
     await app.close();
   });
+
+  it('includes access-control-allow-origin on the hijacked SSE stream', async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/respond',
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+        origin: 'http://localhost',
+      },
+      payload: {
+        user_id: 'web-user',
+        message: 'hello',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost');
+
+    await app.close();
+  });
+
+  it('answers OPTIONS preflight for POST /v1/respond', async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/respond',
+      headers: {
+        origin: 'http://localhost',
+        'access-control-request-method': 'POST',
+      },
+    });
+
+    expect(response.statusCode).toBeGreaterThanOrEqual(200);
+    expect(response.statusCode).toBeLessThan(300);
+    expect(response.headers['access-control-allow-methods']).toContain('POST');
+
+    await app.close();
+  });
 });

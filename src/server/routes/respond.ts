@@ -15,12 +15,25 @@ type RegisterRespondRouteOptions = {
 
 /** Hijacks the reply and sets unbuffered SSE response headers. */
 function writeSseHeaders(reply: FastifyReply): void {
+  // @fastify/cors runs as an onRequest hook (default), so it has already called
+  // reply.header('access-control-allow-origin', ...) by the time we get here. Hijacking
+  // bypasses reply.send, so those headers must be copied into writeHead manually or the
+  // stream ships without CORS. Keep this filter narrow (access-control-* + vary) — do NOT
+  // broaden it, or it would clobber the content-type set below.
+  const corsHeaders: Record<string, string | number | string[]> = {};
+  for (const [name, value] of Object.entries(reply.getHeaders())) {
+    if ((name.startsWith('access-control-') || name === 'vary') && value !== undefined) {
+      corsHeaders[name] = value;
+    }
+  }
+
   reply.hijack();
   reply.raw.writeHead(200, {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache, no-transform',
     connection: 'keep-alive',
     'x-accel-buffering': 'no',
+    ...corsHeaders,
   });
 }
 

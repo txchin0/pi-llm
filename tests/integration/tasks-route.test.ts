@@ -205,4 +205,22 @@ describe('GET /v1/tasks', () => {
 
     await app.close();
   });
+
+  it('includes access-control-allow-origin for cross-origin GET requests', async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/tasks',
+      query: { user_id: 'web-user' },
+      headers: {
+        origin: 'http://localhost',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBe('http://localhost');
+
+    await app.close();
+  });
 });

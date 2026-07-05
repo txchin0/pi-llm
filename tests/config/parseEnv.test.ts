@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   parseBoolean,
+  parseCsvList,
   parseNonEmptyString,
   parsePositiveInt,
 } from '../../src/config/parseEnv.js';
@@ -38,5 +39,31 @@ describe('parseNonEmptyString', () => {
 
   it('returns trimmed non-empty strings', () => {
     expect(parseNonEmptyString('  local  ', 'default')).toBe('local');
+  });
+});
+
+describe('parseCsvList', () => {
+  const fallback = ['http://localhost'];
+
+  it('returns the fallback when unset, blank, or all-comma', () => {
+    expect(parseCsvList(undefined, fallback)).toEqual(fallback);
+    expect(parseCsvList('', fallback)).toEqual(fallback);
+    expect(parseCsvList(',', fallback)).toEqual(fallback);
+    expect(parseCsvList(' , ', fallback)).toEqual(fallback);
+  });
+
+  it('parses comma-separated trimmed values', () => {
+    expect(parseCsvList('http://localhost, https://app.example', fallback)).toEqual([
+      'http://localhost',
+      'https://app.example',
+    ]);
+    expect(parseCsvList('  http://a  ,  , http://b  ', fallback)).toEqual([
+      'http://a',
+      'http://b',
+    ]);
+  });
+
+  it('accepts a single wildcard entry', () => {
+    expect(parseCsvList('*', fallback)).toEqual(['*']);
   });
 });

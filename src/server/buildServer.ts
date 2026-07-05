@@ -1,6 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
+import cors from '@fastify/cors';
 import Fastify, { type FastifyBaseLogger } from 'fastify';
+
+import { env } from '../config/env.js';
 
 import {
   createChildLogger,
@@ -49,6 +52,23 @@ export function buildServer(options: BuildServerOptions) {
     disableRequestLogging: true,
     requestIdHeader: false,
     genReqId: () => requestIdFactory(),
+  });
+
+  const allowAll =
+    env.CORS_ALLOWED_ORIGINS.length === 1 &&
+    env.CORS_ALLOWED_ORIGINS[0] === '*';
+
+  if (allowAll && env.isProd) {
+    throw new Error(
+      'CORS_ALLOWED_ORIGINS cannot be "*" in production: /v1 routes are unauthenticated and would be scriptable from any website.',
+    );
+  }
+
+  app.register(cors, {
+    origin: allowAll ? '*' : env.CORS_ALLOWED_ORIGINS,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept'],
+    maxAge: 86400,
   });
 
   app.setErrorHandler((error, request, reply) => {
