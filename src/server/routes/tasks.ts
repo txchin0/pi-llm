@@ -1,19 +1,28 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  preHandlerHookHandler,
+} from 'fastify';
 
 import { createChildLogger, type AppLogger } from '../../logging/index.js';
 import type { ListTasksController } from '../../tasks/listTasksController.js';
+import { requireUserId } from '../authenticate.js';
 
 type RegisterTasksRouteOptions = {
   controller: ListTasksController;
+  authenticate: preHandlerHookHandler;
   logger: AppLogger;
 };
 
-/** Registers `GET /v1/tasks` and returns JSON task summaries for the caller's user_id. */
+/** Registers `GET /v1/tasks` and returns JSON task summaries for the authenticated user. */
 export function registerTasksRoute(
   app: FastifyInstance,
   options: RegisterTasksRouteOptions,
 ): void {
-  app.get('/v1/tasks', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/v1/tasks', {
+    preHandler: options.authenticate,
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     const requestId = request.id;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
@@ -27,6 +36,7 @@ export function registerTasksRoute(
 
     try {
       const result = await options.controller.handle(request.query, {
+        userId: requireUserId(request),
         logger: log,
       });
 

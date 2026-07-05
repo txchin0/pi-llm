@@ -43,8 +43,8 @@ describe('tasks_read tool', () => {
 
     const result = await tool.execute('call-1', {});
 
-    expect(result.content[0]?.text).toContain('/v1/oauth/google/start?user_id=user-1');
     expect(result.content[0]?.text).toContain('Google Tasks is not connected');
+    expect(result.content[0]?.text).toContain('Settings');
   });
 
   it('returns connect instructions when getAccessToken throws OAuthNotConnectedError', async () => {
@@ -64,7 +64,8 @@ describe('tasks_read tool', () => {
 
     const result = await tool.execute('call-2', {});
 
-    expect(result.content[0]?.text).toContain('/v1/oauth/google/start?user_id=user-2');
+    expect(result.content[0]?.text).toContain('Google Tasks is not connected');
+    expect(result.content[0]?.text).toContain('Settings');
   });
 
   it('lists task lists when listTaskLists is true', async () => {

@@ -33,6 +33,8 @@ export type IntegrationsListResult = IntegrationsListSuccess | IntegrationsFailu
 export type IntegrationsUpdateResult = IntegrationsUpdateSuccess | IntegrationsFailure;
 
 type HandleOptions = {
+  /** Authenticated user id from the bearer token — the only identity source. */
+  userId: string;
   logger?: AppLogger;
 };
 
@@ -50,7 +52,7 @@ export class IntegrationsController {
   /** Validates query params and returns integration summaries for the user. */
   async handleList(
     rawQuery: unknown,
-    options: HandleOptions = {},
+    options: HandleOptions,
   ): Promise<IntegrationsListResult> {
     const log = createChildLogger(options.logger ?? this.logger, {
       component: 'integrations.controller',
@@ -66,18 +68,17 @@ export class IntegrationsController {
         status: 400,
         body: {
           code: 'validation_error',
-          message: 'Query must include user_id.',
+          message: 'Query accepts no parameters.',
         },
       };
     }
 
-    const query = validation.data;
     const requestLog = createChildLogger(log, {
       component: 'integrations.controller',
-      user_id: query.userId,
+      user_id: options.userId,
     });
 
-    const body = await this.service.listForUser(query.userId);
+    const body = await this.service.listForUser(options.userId);
 
     requestLog.info(
       {
@@ -93,7 +94,7 @@ export class IntegrationsController {
   /** Validates the update body and applies integration enablement patches for the user. */
   async handleUpdate(
     rawBody: unknown,
-    options: HandleOptions = {},
+    options: HandleOptions,
   ): Promise<IntegrationsUpdateResult> {
     const log = createChildLogger(options.logger ?? this.logger, {
       component: 'integrations.controller',
@@ -109,13 +110,14 @@ export class IntegrationsController {
         status: 400,
         body: {
           code: 'validation_error',
-          message:
-            'Body must include user_id and integrations with enabled booleans only.',
+          message: 'Body must include integrations with enabled booleans only.',
         },
       };
     }
 
-    const request = validation.data;
+    // Identity always comes from the authenticated token; a client-sent
+    // user_id in the body is ignored.
+    const request = { ...validation.data, userId: options.userId };
     const requestLog = createChildLogger(log, {
       component: 'integrations.controller',
       user_id: request.userId,

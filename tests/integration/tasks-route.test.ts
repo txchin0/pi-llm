@@ -9,6 +9,7 @@ import { ListTasksResponseSchema } from '../../src/contracts/tasks.js';
 import { resolveMigrationsFolder } from '../../src/queue/resolveMigrationsFolder.js';
 import { createSqliteTaskQueue } from '../../src/queue/sqliteTaskQueue.js';
 import type { TaskStatus } from '../../src/queue/taskTypes.js';
+import { authHeaders } from '../helpers/auth.js';
 import { buildTestServer } from '../helpers/buildTestServer.js';
 
 function setTaskStatus(dbPath: string, taskId: string, status: TaskStatus): void {
@@ -67,7 +68,7 @@ describe('GET /v1/tasks', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'web-user' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -75,6 +76,20 @@ describe('GET /v1/tasks', () => {
 
     const body = ListTasksResponseSchema.parse(response.json());
     expect(body.tasks.map((task) => task.id)).toEqual([pending.id, running.id]);
+
+    await app.close();
+  });
+
+  it('returns 401 without a bearer token', async () => {
+    const app = await createApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/tasks',
+      query: { user_id: 'web-user' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'unauthorized' });
 
     await app.close();
   });
@@ -97,7 +112,8 @@ describe('GET /v1/tasks', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'web-user', status: 'completed' },
+      query: { status: 'completed' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     const body = ListTasksResponseSchema.parse(response.json());
@@ -108,7 +124,7 @@ describe('GET /v1/tasks', () => {
     await app.close();
   });
 
-  it('does not return another user tasks', async () => {
+  it('scopes tasks to the token identity, ignoring a user_id query param', async () => {
     const userTask = await queue.enqueue({
       userId: 'user-a',
       description: 'user a task',
@@ -124,7 +140,9 @@ describe('GET /v1/tasks', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'user-a' },
+      // user-b in the query must not override the authenticated user-a.
+      query: { user_id: 'user-b' },
+      headers: await authHeaders(app, 'user-a'),
     });
 
     const body = ListTasksResponseSchema.parse(response.json());
@@ -134,25 +152,13 @@ describe('GET /v1/tasks', () => {
     await app.close();
   });
 
-  it('returns 400 for missing user_id', async () => {
-    const app = await createApp();
-    const response = await app.inject({
-      method: 'GET',
-      url: '/v1/tasks',
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({ code: 'validation_error' });
-
-    await app.close();
-  });
-
   it('returns 400 for invalid status', async () => {
     const app = await createApp();
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'web-user', status: 'bogus' },
+      query: { status: 'bogus' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     expect(response.statusCode).toBe(400);
@@ -166,7 +172,8 @@ describe('GET /v1/tasks', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'web-user', limit: '101' },
+      query: { limit: '101' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     expect(response.statusCode).toBe(400);
@@ -187,7 +194,7 @@ describe('GET /v1/tasks', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'web-user' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     const body = ListTasksResponseSchema.parse(response.json());
@@ -212,9 +219,9 @@ describe('GET /v1/tasks', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/tasks',
-      query: { user_id: 'web-user' },
       headers: {
         origin: 'http://localhost',
+        ...(await authHeaders(app, 'web-user')),
       },
     });
 

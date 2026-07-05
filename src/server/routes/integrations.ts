@@ -1,10 +1,17 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  preHandlerHookHandler,
+} from 'fastify';
 
 import type { IntegrationsController } from '../../integrations/integrationsController.js';
 import { createChildLogger, type AppLogger } from '../../logging/index.js';
+import { requireUserId } from '../authenticate.js';
 
 type RegisterIntegrationsRouteOptions = {
   controller: IntegrationsController;
+  authenticate: preHandlerHookHandler;
   logger: AppLogger;
 };
 
@@ -13,7 +20,9 @@ export function registerIntegrationsRoute(
   app: FastifyInstance,
   options: RegisterIntegrationsRouteOptions,
 ): void {
-  app.get('/v1/integrations', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.get('/v1/integrations', {
+    preHandler: options.authenticate,
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     const requestId = request.id;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
@@ -27,6 +36,7 @@ export function registerIntegrationsRoute(
 
     try {
       const result = await options.controller.handleList(request.query, {
+        userId: requireUserId(request),
         logger: log,
       });
 
@@ -59,7 +69,9 @@ export function registerIntegrationsRoute(
     }
   });
 
-  app.put('/v1/integrations', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.put('/v1/integrations', {
+    preHandler: options.authenticate,
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     const requestId = request.id;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
@@ -73,6 +85,7 @@ export function registerIntegrationsRoute(
 
     try {
       const result = await options.controller.handleUpdate(request.body, {
+        userId: requireUserId(request),
         logger: log,
       });
 

@@ -42,8 +42,8 @@ describe('calendar_read tool', () => {
 
     const result = await tool.execute('call-1', { mode: 'upcoming' });
 
-    expect(result.content[0]?.text).toContain('/v1/oauth/google/start?user_id=user-1');
     expect(result.content[0]?.text).toContain('not connected');
+    expect(result.content[0]?.text).toContain('Settings');
   });
 
   it('returns connect instructions when getAccessToken throws OAuthNotConnectedError', async () => {
@@ -63,7 +63,7 @@ describe('calendar_read tool', () => {
 
     const result = await tool.execute('call-2', { mode: 'upcoming' });
 
-    expect(result.content[0]?.text).toContain('/v1/oauth/google/start?user_id=user-2');
+    expect(result.content[0]?.text).toContain('not connected');
     expect(result.content[0]?.text).not.toContain('OAuth provider');
   });
 

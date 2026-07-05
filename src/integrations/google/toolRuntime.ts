@@ -39,13 +39,12 @@ export function cancelledToolResult() {
 export function formatGoogleToolError(
   product: GoogleProductLabel,
   error: unknown,
-  userId: string,
 ): string {
   if (error instanceof GoogleNotConnectedError) {
-    return formatGoogleConnectMessage(userId, product);
+    return formatGoogleConnectMessage(product);
   }
 
-  const oauthMessage = formatGoogleConnectError(error, userId, product);
+  const oauthMessage = formatGoogleConnectError(error, product);
   if (oauthMessage !== null) {
     return oauthMessage;
   }

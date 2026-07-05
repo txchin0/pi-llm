@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SurfaceSessionRegistry } from '../../src/surface/surfaceSessionRegistry.js';
+import { authHeaders } from '../helpers/auth.js';
 import { buildTestServer } from '../helpers/buildTestServer.js';
 
 type ParsedSseEvent = {
@@ -43,9 +44,9 @@ describe('POST /v1/respond', () => {
       headers: {
         accept: 'text/event-stream',
         'content-type': 'application/json',
+        ...(await authHeaders(app)),
       },
       payload: {
-        user_id: 'web-user',
         message: 'hello',
       },
     });
@@ -69,7 +70,7 @@ describe('POST /v1/respond', () => {
     await app.close();
   });
 
-  it('reuses a supplied session_id in the start event', async () => {
+  it('rejects requests without a bearer token', async () => {
     const app = await createApp();
 
     const response = await app.inject({
@@ -80,7 +81,53 @@ describe('POST /v1/respond', () => {
         'content-type': 'application/json',
       },
       payload: {
-        user_id: 'web-user',
+        message: 'hello',
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'unauthorized' });
+
+    await app.close();
+  });
+
+  it('ignores a client-supplied user_id and uses the token identity', async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/respond',
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+        ...(await authHeaders(app, 'token-user')),
+      },
+      payload: {
+        user_id: 'someone-else',
+        message: 'hello',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const events = parseSsePayload(response.body);
+    expect(events[0]?.data.user_id).toBe('token-user');
+
+    await app.close();
+  });
+
+  it('reuses a supplied session_id in the start event', async () => {
+    const app = await createApp();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/respond',
+      headers: {
+        accept: 'text/event-stream',
+        'content-type': 'application/json',
+        ...(await authHeaders(app)),
+      },
+      payload: {
         session_id: 'sess_followup12345',
         message: 'hello again',
       },
@@ -102,10 +149,10 @@ describe('POST /v1/respond', () => {
       headers: {
         accept: 'text/event-stream',
         'content-type': 'application/json',
+        ...(await authHeaders(app)),
       },
       payload: {
-        user_id: '',
-        message: 'hello',
+        message: '',
       },
     });
 
@@ -131,7 +178,7 @@ describe('POST /v1/respond', () => {
     );
     const providerError = 'Cannot reach Surface LLM at http://127.0.0.1:8080';
 
-    const app = buildTestServer({
+    const app = await buildTestServer({
       service: createSurfaceRespondService({
         registry: {
           getOrCreate: () => Promise.reject(new Error(providerError)),
@@ -148,9 +195,9 @@ describe('POST /v1/respond', () => {
       headers: {
         accept: 'text/event-stream',
         'content-type': 'application/json',
+        ...(await authHeaders(app)),
       },
       payload: {
-        user_id: 'web-user',
         message: 'hello',
       },
     });
@@ -190,9 +237,9 @@ describe('POST /v1/respond', () => {
         accept: 'text/event-stream',
         'content-type': 'application/json',
         origin: 'http://localhost',
+        ...(await authHeaders(app)),
       },
       payload: {
-        user_id: 'web-user',
         message: 'hello',
       },
     });
@@ -212,12 +259,16 @@ describe('POST /v1/respond', () => {
       headers: {
         origin: 'http://localhost',
         'access-control-request-method': 'POST',
+        'access-control-request-headers': 'authorization,content-type',
       },
     });
 
     expect(response.statusCode).toBeGreaterThanOrEqual(200);
     expect(response.statusCode).toBeLessThan(300);
     expect(response.headers['access-control-allow-methods']).toContain('POST');
+    expect(String(response.headers['access-control-allow-headers']).toLowerCase()).toContain(
+      'authorization',
+    );
 
     await app.close();
   });

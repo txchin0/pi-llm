@@ -454,25 +454,58 @@ Surface conversations may use Pi in-memory session management for MVP or Pi's se
 
 ## 14. Security and Privacy
 
-### 14.1 MVP Threat Model
+### 14.1 Authentication
 
-Local or single-trusted-user deployment. No multi-tenant auth required initially. API keys and calendar credentials stay on the server.
+Every `/v1` route except `POST /v1/auth/*` and the OAuth `start`/`callback` pair requires
+`Authorization: Bearer <access JWT>`. Accounts are `user_id` + password
+(self-serve `POST /v1/auth/register`; rate limiting is a later concern — the seam is the
+auth route registration). Passwords are hashed with scrypt behind a `PasswordHasher`
+interface (`src/auth/passwordHasher.ts`) so a move to argon2id or a managed IdP is a swap.
+
+Tokens (`src/auth/`):
+
+- **Access JWT** — HS256, ~15 min TTL, signed with `AUTH_JWT_SECRET` (required in prod,
+  fails fast at startup). Claims: `sub` (user id), `iat`, `exp`, `typ: "access"`.
+- **Refresh token** — opaque `rt_…` value, 30 day TTL, stored as a SHA-256 hash in the
+  `refresh_tokens` table (same SQLite file as tasks). Rotated on every
+  `POST /v1/auth/refresh`; a just-rotated token stays usable for a 60 s grace window
+  because two Android clients (WebView + native assistant) share one pair and can race.
+  Reuse beyond the grace window, revocation (`POST /v1/auth/logout`), and expiry all 401.
+  Multiple live refresh tokens per user are allowed (one per login).
+
+  **Accepted tradeoff:** within the grace window a rotated token is not consumed, so
+  replaying it repeatedly mints a fresh pair each time (no per-token cap). A stolen
+  refresh token can therefore spawn several live sessions during those 60 s. We accept
+  this to keep the Android two-client race from logging users out; the exposure is bounded
+  by the short window and by `logout` revoking a session. Revisit (cap re-issues per
+  rotated token, or shorten the window) if refresh-token theft becomes a concern.
+
+The authenticated identity is the only source of `user_id`: the bearer pre-handler
+(`src/server/authenticate.ts`) attaches it to the request, and a `user_id` still present
+in a request body or query string is accepted but ignored.
 
 ### 14.2 Data Isolation
 
-Strict per-user path prefix on all tool operations. No cross-user reads or writes.
+Strict per-user path prefix on all tool operations, scoped by the authenticated user id. No cross-user reads or writes.
 
 ### 14.3 Secret Handling
 
-Environment variables or Pi auth storage for LLM and search API keys. No secrets in memory files or task payloads.
+Environment variables or Pi auth storage for LLM and search API keys, plus `AUTH_JWT_SECRET` for access token signing. No secrets in memory files or task payloads. Refresh tokens are stored hashed, never raw.
 
 ### 14.4 Future Considerations
 
-Authentication, encryption at rest, and network exposure controls when moving beyond local single-user use.
+Encryption at rest, network exposure controls, registration abuse controls (rate limiting/invites), and OAuth-based login against a managed IdP. The KDF and token logic sit behind small interfaces to keep that a swap, not a rewrite.
 
-### 14.5 OAuth Connect (MVP)
+### 14.5 OAuth Connect
 
-OAuth start/status/disconnect accept `user_id` as a trusted query parameter (same model as tasks in §12.2). Anyone who can reach the server can link OAuth tokens to an arbitrary user id until authentication exists; then derive `userId` server-side and bind it into signed OAuth state. Callback state is stored in-memory (single-process only; restart mid-flow requires re-connecting).
+`GET /v1/oauth/:providerId/start` is a top-level browser navigation and cannot carry an
+Authorization header, so it consumes a **connect token**: the frontend calls the
+authenticated `POST /v1/oauth/connect-token`, which mints a single-use ~60 s token bound
+server-side to the user (`src/integrations/oauth/connectTokenStore.ts`, in-memory,
+single-process — same semantics as callback state). `start` validates and consumes it,
+derives `userId`, and binds it into signed OAuth state; `user_id` is never trusted from
+the query. `status`/`disconnect` are ordinary bearer-authenticated routes. Callback state
+is stored in-memory (single-process only; restart mid-flow requires re-connecting).
 
 ---
 

@@ -1,10 +1,17 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  preHandlerHookHandler,
+} from 'fastify';
 
 import type { OAuthController } from '../../integrations/oauth/oauthController.js';
 import { createChildLogger, type AppLogger } from '../../logging/index.js';
+import { requireUserId } from '../authenticate.js';
 
 type RegisterOAuthRouteOptions = {
   controller: OAuthController;
+  authenticate: preHandlerHookHandler;
   logger: AppLogger;
 };
 
@@ -14,16 +21,38 @@ function sendRedirect(reply: FastifyReply, location: string): void {
 }
 
 /**
- * Registers generic OAuth connect routes under `/v1/oauth/:providerId`.
+ * Registers generic OAuth connect routes under `/v1/oauth/:providerId`, plus
+ * the authenticated `POST /v1/oauth/connect-token` mint endpoint.
  *
- * MVP trust model: `user_id` on start/status/disconnect is a trusted query parameter
- * (see DESIGN.md §14.5). When authentication exists, derive `userId` server-side and
- * bind it into signed OAuth state instead of accepting it from the client.
+ * `start` is a top-level browser navigation, so instead of a bearer header it
+ * consumes a single-use connect token bound server-side to the user.
+ * `callback` comes from the provider and recovers identity from signed OAuth
+ * state; both stay outside the bearer pre-handler.
  */
 export function registerOAuthRoute(
   app: FastifyInstance,
   options: RegisterOAuthRouteOptions,
 ): void {
+  app.post(
+    '/v1/oauth/connect-token',
+    { preHandler: options.authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const log = createChildLogger(options.logger, {
+        component: 'oauth.route',
+        request_id: request.id,
+      });
+
+      const result = options.controller.handleConnectToken(requireUserId(request), {
+        logger: log,
+      });
+
+      reply
+        .status(result.status)
+        .header('cache-control', 'no-store')
+        .send(result.body);
+    },
+  );
+
   app.get(
     '/v1/oauth/:providerId/start',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -130,6 +159,7 @@ export function registerOAuthRoute(
 
   app.get(
     '/v1/oauth/:providerId/status',
+    { preHandler: options.authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const requestId = request.id;
       const startedAtMs = Date.now();
@@ -143,9 +173,11 @@ export function registerOAuthRoute(
       let requestError: unknown;
 
       try {
-        const result = await options.controller.handleStatus(request.params, request.query, {
-          logger: log,
-        });
+        const result = await options.controller.handleStatus(
+          request.params,
+          requireUserId(request),
+          { logger: log },
+        );
 
         reply
           .status(result.status)
@@ -180,6 +212,7 @@ export function registerOAuthRoute(
 
   app.delete(
     '/v1/oauth/:providerId',
+    { preHandler: options.authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const requestId = request.id;
       const startedAtMs = Date.now();
@@ -195,7 +228,7 @@ export function registerOAuthRoute(
       try {
         const result = await options.controller.handleDisconnect(
           request.params,
-          request.query,
+          requireUserId(request),
           { logger: log },
         );
 

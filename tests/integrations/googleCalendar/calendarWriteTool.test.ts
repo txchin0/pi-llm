@@ -42,8 +42,8 @@ describe('calendar_write tool', () => {
 
     const result = await tool.execute('call-1', { action: 'delete', eventId: 'evt-1' });
 
-    expect(result.content[0]?.text).toContain('/v1/oauth/google/start?user_id=user-1');
     expect(result.content[0]?.text).toContain('not connected');
+    expect(result.content[0]?.text).toContain('Settings');
   });
 
   it('returns connect instructions when getAccessToken throws OAuthNotConnectedError', async () => {
@@ -69,7 +69,7 @@ describe('calendar_write tool', () => {
       end: '2026-06-16T11:00:00',
     });
 
-    expect(result.content[0]?.text).toContain('/v1/oauth/google/start?user_id=user-2');
+    expect(result.content[0]?.text).toContain('not connected');
     expect(result.content[0]?.text).not.toContain('missing scopes');
   });
 });

@@ -1,14 +1,15 @@
+import type { ConnectTokenResponse } from '../../contracts/auth.js';
 import {
   buildOAuthConnectedRedirectUrl,
   OAuthCallbackQuerySchema,
   OAuthProviderIdParamSchema,
   OAuthStartQuerySchema,
-  OAuthUserQuerySchema,
   toOAuthStatusResponse,
   type OAuthCallbackErrorCode,
   type OAuthStatusResponse,
 } from '../../contracts/oauth.js';
 import { createChildLogger, createRootLogger, type AppLogger } from '../../logging/index.js';
+import { ConnectTokenError, type ConnectTokenStore } from './connectTokenStore.js';
 import { isKnownOAuthProvider } from './oauthProviderRegistry.js';
 import type { OAuthService } from './oauthService.js';
 import {
@@ -19,6 +20,7 @@ import { OAuthStateError } from './oauthStateStore.js';
 
 export type OAuthControllerDependencies = {
   service: OAuthService;
+  connectTokenStore: ConnectTokenStore;
   logger?: AppLogger;
 };
 
@@ -47,9 +49,22 @@ export type OAuthProviderNotConfiguredFailure = {
   };
 };
 
+export type OAuthUnauthorizedFailure = {
+  status: 401;
+  body: {
+    code: 'invalid_connect_token';
+    message: string;
+  };
+};
+
 export type OAuthStartRedirect = {
   status: 302;
   location: string;
+};
+
+export type OAuthConnectTokenSuccess = {
+  status: 200;
+  body: ConnectTokenResponse;
 };
 
 export type OAuthStatusSuccess = {
@@ -65,6 +80,7 @@ export type OAuthDisconnectSuccess = {
 export type OAuthStartResult =
   | OAuthStartRedirect
   | OAuthValidationFailure
+  | OAuthUnauthorizedFailure
   | OAuthNotFoundFailure
   | OAuthProviderNotConfiguredFailure;
 
@@ -91,19 +107,42 @@ type KnownProviderGuardOptions = {
 /** Validates OAuth HTTP requests and delegates to the OAuth service. */
 export class OAuthController {
   private readonly service: OAuthService;
+  private readonly connectTokenStore: ConnectTokenStore;
   private readonly logger: AppLogger;
 
-  /** Creates a controller with the OAuth service and optional logger. */
+  /** Creates a controller with the OAuth service, connect token store, and optional logger. */
   constructor(dependencies: OAuthControllerDependencies) {
     this.service = dependencies.service;
+    this.connectTokenStore = dependencies.connectTokenStore;
     this.logger = dependencies.logger ?? createRootLogger();
   }
 
+  /** Mints a short-lived single-use connect token for the authenticated user. */
+  handleConnectToken(
+    userId: string,
+    options: HandleOptions = {},
+  ): OAuthConnectTokenSuccess {
+    const log = createChildLogger(options.logger ?? this.logger, {
+      component: 'oauth.controller',
+      user_id: userId,
+    });
+
+    const { token, expiresInSeconds } = this.connectTokenStore.create(userId);
+
+    log.info(
+      { event: 'oauth.connect_token.created' },
+      'OAuth connect token minted',
+    );
+
+    return {
+      status: 200,
+      body: { connect_token: token, expires_in: expiresInSeconds },
+    };
+  }
+
   /**
-   * Validates params/query and returns a redirect to the provider consent URL.
-   *
-   * MVP trust model: `user_id` is accepted from the query string without authentication.
-   * When auth exists, derive `userId` server-side and bind it into signed OAuth state instead.
+   * Validates params/query, consumes the single-use connect token to derive
+   * the user, and returns a redirect to the provider consent URL.
    */
   async handleStart(
     rawParams: unknown,
@@ -124,12 +163,31 @@ export class OAuthController {
       return validationFailure(
         log,
         'oauth.start.validation_failed',
-        'Query must include user_id.',
+        'Query must include connect_token.',
       );
     }
 
     const { providerId } = paramsValidation.data;
-    const { userId } = queryValidation.data;
+
+    let userId: string;
+    try {
+      ({ userId } = this.connectTokenStore.consume(queryValidation.data.connectToken));
+    } catch (error) {
+      if (error instanceof ConnectTokenError) {
+        log.warn(
+          { event: 'oauth.start.invalid_connect_token', reason: error.code },
+          'OAuth start connect token rejected',
+        );
+        return {
+          status: 401,
+          body: {
+            code: 'invalid_connect_token',
+            message: 'Connect token is missing, already used, or expired.',
+          },
+        };
+      }
+      throw error;
+    }
 
     const providerFailure = assertKnownProvider(log, providerId, 'oauth.start', {
       onUnknown: 'json404',
@@ -265,10 +323,10 @@ export class OAuthController {
     }
   }
 
-  /** Validates params/query and returns OAuth connection status for the user. */
+  /** Validates params and returns OAuth connection status for the authenticated user. */
   async handleStatus(
     rawParams: unknown,
-    rawQuery: unknown,
+    userId: string,
     options: HandleOptions = {},
   ): Promise<OAuthStatusResult> {
     const log = createChildLogger(options.logger ?? this.logger, {
@@ -280,17 +338,7 @@ export class OAuthController {
       return validationFailure(log, 'oauth.status.validation_failed', 'Invalid provider id.');
     }
 
-    const queryValidation = OAuthUserQuerySchema.safeParse(rawQuery);
-    if (!queryValidation.success) {
-      return validationFailure(
-        log,
-        'oauth.status.validation_failed',
-        'Query must include user_id.',
-      );
-    }
-
     const { providerId } = paramsValidation.data;
-    const { userId } = queryValidation.data;
 
     const providerFailure = assertKnownProvider(log, providerId, 'oauth.status', {
       onUnknown: 'json404',
@@ -320,10 +368,10 @@ export class OAuthController {
     return { status: 200, body };
   }
 
-  /** Validates params/query and deletes stored OAuth tokens for the user. */
+  /** Validates params and deletes stored OAuth tokens for the authenticated user. */
   async handleDisconnect(
     rawParams: unknown,
-    rawQuery: unknown,
+    userId: string,
     options: HandleOptions = {},
   ): Promise<OAuthDisconnectResult> {
     const log = createChildLogger(options.logger ?? this.logger, {
@@ -339,17 +387,7 @@ export class OAuthController {
       );
     }
 
-    const queryValidation = OAuthUserQuerySchema.safeParse(rawQuery);
-    if (!queryValidation.success) {
-      return validationFailure(
-        log,
-        'oauth.disconnect.validation_failed',
-        'Query must include user_id.',
-      );
-    }
-
     const { providerId } = paramsValidation.data;
-    const { userId } = queryValidation.data;
 
     const providerFailure = assertKnownProvider(log, providerId, 'oauth.disconnect', {
       onUnknown: 'json404',

@@ -33,6 +33,8 @@ function defaultSessionIdFactory(): SessionId {
 }
 
 type HandleRequestOptions = {
+  /** Authenticated user id from the bearer token — the only identity source. */
+  userId: string;
   requestId?: RequestId;
   logger?: AppLogger;
 };
@@ -62,7 +64,7 @@ export class RespondController {
    */
   async *handle(
     rawRequest: unknown,
-    options: HandleRequestOptions = {},
+    options: HandleRequestOptions,
   ): AsyncGenerator<RespondSseEvent> {
     const requestId = options.requestId ?? this.requestIdFactory();
     const baseLogger = options.logger ?? this.logger;
@@ -83,7 +85,9 @@ export class RespondController {
       return;
     }
 
-    const request = validation.data;
+    // Identity always comes from the authenticated token; a client-sent
+    // user_id in the body is ignored.
+    const request = { ...validation.data, user_id: options.userId };
     const startedAt = this.now();
     const sessionId = request.session_id ?? this.sessionIdFactory();
     const requestLog = createChildLogger(log, {

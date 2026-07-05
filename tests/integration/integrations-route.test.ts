@@ -9,6 +9,7 @@ import {
 } from '../../src/contracts/integrations.js';
 import { createFileIntegrationStore } from '../../src/integrations/store/fileIntegrationStore.js';
 import { resolveUserIntegrationsPath } from '../../src/integrations/store/resolveUserIntegrationsPath.js';
+import { authHeaders } from '../helpers/auth.js';
 import { buildTestServer } from '../helpers/buildTestServer.js';
 
 describe('integrations routes', () => {
@@ -37,7 +38,7 @@ describe('integrations routes', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/integrations',
-      query: { user_id: 'web-user' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -77,7 +78,7 @@ describe('integrations routes', () => {
       config: { apiKey: 'secret' },
     });
 
-    const app = buildTestServer({
+    const app = await buildTestServer({
       integrationStore,
       requestIdFactory: () => 'req_test00000001',
     });
@@ -85,8 +86,8 @@ describe('integrations routes', () => {
     const response = await app.inject({
       method: 'PUT',
       url: '/v1/integrations',
+      headers: await authHeaders(app, 'web-user'),
       payload: {
-        user_id: 'web-user',
         integrations: {
           web_search: { enabled: false },
         },
@@ -110,15 +111,15 @@ describe('integrations routes', () => {
     await app.close();
   });
 
-  it('GET /v1/integrations returns 400 for missing user_id', async () => {
+  it('GET /v1/integrations returns 401 without a bearer token', async () => {
     const app = await createApp();
     const response = await app.inject({
       method: 'GET',
       url: '/v1/integrations',
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({ code: 'validation_error' });
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'unauthorized' });
 
     await app.close();
   });
@@ -128,8 +129,8 @@ describe('integrations routes', () => {
     const response = await app.inject({
       method: 'PUT',
       url: '/v1/integrations',
+      headers: await authHeaders(app, 'web-user'),
       payload: {
-        user_id: 'web-user',
         integrations: {
           calendar: { enabled: true },
         },
@@ -147,8 +148,8 @@ describe('integrations routes', () => {
     const response = await app.inject({
       method: 'PUT',
       url: '/v1/integrations',
+      headers: await authHeaders(app, 'web-user'),
       payload: {
-        user_id: 'web-user',
         integrations: {
           web_search: { enabled: false, config: { apiKey: 'nope' } },
         },

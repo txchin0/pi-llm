@@ -1,4 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+  preHandlerHookHandler,
+} from 'fastify';
 
 import {
   createChildLogger,
@@ -6,10 +11,12 @@ import {
   type AppLogger,
 } from '../../logging/index.js';
 import type { RespondController } from '../../respond/respondController.js';
+import { requireUserId } from '../authenticate.js';
 import { writeSseEvent } from '../writeSseEvent.js';
 
 type RegisterRespondRouteOptions = {
   controller: RespondController;
+  authenticate: preHandlerHookHandler;
   logger: AppLogger;
 };
 
@@ -49,7 +56,9 @@ export function registerRespondRoute(
   app: FastifyInstance,
   options: RegisterRespondRouteOptions,
 ): void {
-  app.post('/v1/respond', async (request: FastifyRequest, reply: FastifyReply) => {
+  app.post('/v1/respond', {
+    preHandler: options.authenticate,
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     const requestId = request.id;
     const startedAtMs = Date.now();
     const log = createChildLogger(options.logger, {
@@ -65,6 +74,7 @@ export function registerRespondRoute(
 
     try {
       for await (const event of options.controller.handle(request.body, {
+        userId: requireUserId(request),
         requestId,
         logger: log,
       })) {

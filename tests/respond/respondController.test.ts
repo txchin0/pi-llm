@@ -8,9 +8,11 @@ import { createStubRespondService } from '../helpers/stubRespondService.js';
 async function collectEvents(
   controller: RespondController,
   rawRequest: unknown,
+  userId = 'web-user',
 ): Promise<RespondSseEvent[]> {
   const events: RespondSseEvent[] = [];
   for await (const event of controller.handle(rawRequest, {
+    userId,
     requestId: 'req_test00000001',
   })) {
     events.push(event);
@@ -26,8 +28,7 @@ describe('RespondController', () => {
     });
 
     const events = await collectEvents(controller, {
-      user_id: '',
-      message: 'hello',
+      message: '',
     });
 
     expect(events).toEqual([
@@ -36,9 +37,28 @@ describe('RespondController', () => {
         request_id: 'req_test00000001',
         code: 'validation_error',
         message:
-          'Request body must include user_id, message, and an optional server-issued session_id.',
+          'Request body must include message and an optional server-issued session_id.',
       },
     ]);
+  });
+
+  it('sources user_id from the authenticated identity, ignoring the body', async () => {
+    const controller = new RespondController({
+      service: createStubRespondService(),
+      now: () => '2026-06-09T12:00:00.000Z',
+      sessionIdFactory: () => 'sess_test00000001',
+    });
+
+    const events = await collectEvents(
+      controller,
+      { user_id: 'spoofed-user', message: 'hello' },
+      'token-user',
+    );
+
+    expect(events[0]).toMatchObject({
+      type: 'start',
+      user_id: 'token-user',
+    });
   });
 
   it('yields start then delegates to the service', async () => {

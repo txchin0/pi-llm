@@ -62,14 +62,15 @@ describe('RespondRequestSchema', () => {
     ).toBe(false);
   });
 
-  it('rejects empty identifiers and malformed session ids', () => {
+  it('accepts payloads without user_id (identity comes from the token)', () => {
     expect(
       RespondRequestSchema.safeParse({
-        user_id: '',
         message: 'Hello there',
       }).success,
-    ).toBe(false);
+    ).toBe(true);
+  });
 
+  it('rejects empty messages and malformed session ids', () => {
     expect(
       RespondRequestSchema.safeParse({
         user_id: 'user-123',

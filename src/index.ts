@@ -2,6 +2,10 @@ import { mkdir } from 'node:fs/promises';
 
 import type { FastifyInstance } from 'fastify';
 
+import { createAuthService } from './auth/authService.js';
+import { createScryptPasswordHasher } from './auth/passwordHasher.js';
+import { createSqliteAuthStore } from './auth/sqliteAuthStore.js';
+import type { AuthStore } from './auth/authStore.js';
 import { createRoleAgentLlmRuntime } from './config/agentLlm.js';
 import { env } from './config/env.js';
 import { parseGoogleOAuthConfig } from './config/googleOAuth.js';
@@ -59,6 +63,16 @@ export async function startServer(): Promise<void> {
     log: createChildLogger(logger, { component: 'queue' }),
   });
 
+  const authStore = await createSqliteAuthStore({
+    dbPath: resolveTaskDbPath(env.DATA_ROOT),
+    migrationsFolder: resolveMigrationsFolder(),
+  });
+  const authService = createAuthService({
+    store: authStore,
+    hasher: createScryptPasswordHasher(),
+    jwtSecret: env.AUTH_JWT_SECRET,
+  });
+
   const requeuedCount = await taskQueue.requeueStuckRunning();
   if (requeuedCount > 0) {
     createChildLogger(logger, { component: 'queue' }).info(
@@ -90,6 +104,7 @@ export async function startServer(): Promise<void> {
     service,
     taskQueue,
     integrationStore,
+    authService,
     ...(googleOAuthConfig !== undefined ? { oauthService } : {}),
   });
 
@@ -138,6 +153,7 @@ export async function startServer(): Promise<void> {
   registerShutdownHandlers({
     app,
     taskQueue,
+    authStore,
     workerLoop,
     logger,
     processShutdownHooks: collectProcessShutdownHooks(),
@@ -172,6 +188,7 @@ export async function startServer(): Promise<void> {
 type ShutdownDependencies = {
   app: FastifyInstance;
   taskQueue: SqliteTaskQueue;
+  authStore: AuthStore;
   workerLoop?: WorkerLoop | undefined;
   logger: ReturnType<typeof createRootLogger>;
   processShutdownHooks: Array<() => Promise<void> | void>;
@@ -199,6 +216,7 @@ function registerShutdownHandlers(dependencies: ShutdownDependencies): void {
     }
 
     dependencies.taskQueue.close();
+    dependencies.authStore.close();
     await dependencies.app.close();
     process.exit(0);
   };

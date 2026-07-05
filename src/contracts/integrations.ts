@@ -3,18 +3,14 @@ import { z } from 'zod';
 import { effectiveEnabled } from '../integrations/integrationState.js';
 import type { UserIntegrationState } from '../integrations/store/integrationStore.js';
 import type { IntegrationDefinition } from '../integrations/types.js';
-import { UserIdSchema } from './respond.js';
 
 export const ListIntegrationsQuerySchema = z
   .object({
-    user_id: UserIdSchema,
+    /** Ignored: identity comes from the access token. Accepted so pre-auth clients don't 400. */
+    user_id: z.string().optional(),
   })
   .strict()
-  .transform((query) => ({
-    userId: query.user_id,
-  }));
-
-export type ParsedListIntegrationsQuery = z.infer<typeof ListIntegrationsQuerySchema>;
+  .transform(() => ({}));
 
 export const IntegrationOAuthSummarySchema = z
   .object({
@@ -50,16 +46,19 @@ export const IntegrationEnablementPatchSchema = z
 
 export const UpdateIntegrationsRequestSchema = z
   .object({
-    user_id: UserIdSchema,
+    /** Ignored: identity comes from the access token. Accepted so pre-auth clients don't 400. */
+    user_id: z.string().optional(),
     integrations: z.record(z.string(), IntegrationEnablementPatchSchema),
   })
   .strict()
   .transform((body) => ({
-    userId: body.user_id,
     patches: body.integrations,
   }));
 
-export type ParsedUpdateIntegrationsRequest = z.infer<typeof UpdateIntegrationsRequestSchema>;
+/** A validated update request with the authenticated user id attached. */
+export type ParsedUpdateIntegrationsRequest = z.infer<
+  typeof UpdateIntegrationsRequestSchema
+> & { userId: string };
 
 /** Maps a registry definition and optional stored state to the public integration summary. */
 export function toIntegrationSummary(

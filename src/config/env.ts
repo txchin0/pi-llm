@@ -79,6 +79,29 @@ function parseLogPretty(
   return parseBoolean(value, nodeEnv === 'development');
 }
 
+/**
+ * Parses `AUTH_JWT_SECRET`. Required in production (fail fast — every access
+ * token is signed with it); dev/test fall back to a fixed insecure secret so
+ * local restarts keep sessions valid.
+ */
+function parseAuthJwtSecret(
+  value: string | undefined,
+  nodeEnv: NodeEnv,
+): string {
+  const trimmed = value?.trim() ?? '';
+  if (trimmed !== '') {
+    return trimmed;
+  }
+
+  if (nodeEnv === 'production') {
+    throw new Error(
+      'AUTH_JWT_SECRET is required in production. Set it to a long random string.',
+    );
+  }
+
+  return 'dev-insecure-jwt-secret';
+}
+
 /** Parses `TIMEZONE` (IANA), defaulting to Australia/Sydney when unset. */
 function parseTimezone(value: string | undefined): string {
   const zone =
@@ -138,6 +161,7 @@ export const env = {
   CORS_ALLOWED_ORIGINS: parseCsvList(process.env.CORS_ALLOWED_ORIGINS, [
     'http://localhost',
   ]),
+  AUTH_JWT_SECRET: parseAuthJwtSecret(process.env.AUTH_JWT_SECRET, nodeEnv),
   isDev: nodeEnv === 'development',
   isTest: nodeEnv === 'test',
   isProd: nodeEnv === 'production',

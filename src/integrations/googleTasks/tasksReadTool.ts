@@ -93,7 +93,7 @@ export function registerTasksReadTool(pi: ExtensionAPI, ctx: IntegrationContext)
           return cancelledToolResult();
         }
 
-        return textToolResult(formatGoogleToolError('Tasks', error, ctx.userId));
+        return textToolResult(formatGoogleToolError('Tasks', error));
       }
     },
   });

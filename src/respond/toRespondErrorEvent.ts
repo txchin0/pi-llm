@@ -19,6 +19,6 @@ export function toValidationErrorEvent(requestId: RequestId): RespondErrorEvent 
   return toRespondErrorEvent(
     requestId,
     'validation_error',
-    'Request body must include user_id, message, and an optional server-issued session_id.',
+    'Request body must include message and an optional server-issued session_id.',
   );
 }

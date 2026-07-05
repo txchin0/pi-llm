@@ -26,6 +26,8 @@ export type ListTasksFailure = {
 export type ListTasksResult = ListTasksSuccess | ListTasksFailure;
 
 type HandleOptions = {
+  /** Authenticated user id from the bearer token — the only identity source. */
+  userId: string;
   logger?: AppLogger;
 };
 
@@ -43,7 +45,7 @@ export class ListTasksController {
   /** Validates query params and returns a JSON response body with status code. */
   async handle(
     rawQuery: unknown,
-    options: HandleOptions = {},
+    options: HandleOptions,
   ): Promise<ListTasksResult> {
     const log = createChildLogger(options.logger ?? this.logger, {
       component: 'tasks.controller',
@@ -59,13 +61,14 @@ export class ListTasksController {
         status: 400,
         body: {
           code: 'validation_error',
-          message:
-            'Query must include user_id and optional status and limit parameters.',
+          message: 'Query accepts optional status and limit parameters.',
         },
       };
     }
 
-    const query = validation.data;
+    // Identity always comes from the authenticated token; a client-sent
+    // user_id query param is ignored.
+    const query = { ...validation.data, userId: options.userId };
     const requestLog = createChildLogger(log, {
       component: 'tasks.controller',
       user_id: query.userId,

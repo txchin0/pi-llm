@@ -15,14 +15,18 @@ export const ToolStepSchema = z.number().int().nonnegative();
 
 export const RespondRequestSchema = z
   .object({
-    user_id: UserIdSchema,
+    /** Ignored: identity comes from the access token. Accepted so pre-auth clients don't 400. */
+    user_id: z.string().optional(),
     session_id: SessionIdSchema.optional(),
     message: z.string().trim().min(1),
     show_thinking: z.boolean().optional(),
   })
   .strict();
 
-export type RespondRequest = z.infer<typeof RespondRequestSchema>;
+/** A validated turn with the server-derived (authenticated) user id attached. */
+export type RespondRequest = Omit<z.infer<typeof RespondRequestSchema>, 'user_id'> & {
+  user_id: UserId;
+};
 export type UserId = z.infer<typeof UserIdSchema>;
 export type SessionId = z.infer<typeof SessionIdSchema>;
 export type RequestId = z.infer<typeof RequestIdSchema>;

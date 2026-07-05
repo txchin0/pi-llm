@@ -115,7 +115,7 @@ export function registerCalendarReadTool(pi: ExtensionAPI, ctx: IntegrationConte
           return cancelledToolResult();
         }
 
-        return textToolResult(formatGoogleToolError('Calendar', error, ctx.userId));
+        return textToolResult(formatGoogleToolError('Calendar', error));
       }
     },
   });

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import type { OAuthStatus } from '../integrations/oauth/oauthService.js';
-import { UserIdSchema } from './respond.js';
 
 export const OAuthProviderIdParamSchema = z
   .object({
@@ -14,13 +13,18 @@ export const OAuthProviderIdParamSchema = z
 
 export type ParsedOAuthProviderIdParam = z.infer<typeof OAuthProviderIdParamSchema>;
 
+/**
+ * `/start` is a top-level browser navigation and cannot carry an
+ * Authorization header, so identity arrives as a short-lived single-use
+ * connect token minted by the authenticated `POST /v1/oauth/connect-token`.
+ */
 export const OAuthStartQuerySchema = z
   .object({
-    user_id: UserIdSchema,
+    connect_token: z.string().trim().min(1),
   })
   .strict()
   .transform((query) => ({
-    userId: query.user_id,
+    connectToken: query.connect_token,
   }));
 
 export type ParsedOAuthStartQuery = z.infer<typeof OAuthStartQuerySchema>;
@@ -88,16 +92,12 @@ export const OAuthCallbackQuerySchema = z
 
 export type ParsedOAuthCallbackQuery = z.infer<typeof OAuthCallbackQuerySchema>;
 
+/** Status/disconnect identity comes from the access token; `user_id` is accepted and ignored. */
 export const OAuthUserQuerySchema = z
   .object({
-    user_id: UserIdSchema,
+    user_id: z.string().optional(),
   })
-  .strict()
-  .transform((query) => ({
-    userId: query.user_id,
-  }));
-
-export type ParsedOAuthUserQuery = z.infer<typeof OAuthUserQuerySchema>;
+  .strict();
 
 export const OAuthStatusResponseSchema = z
   .object({

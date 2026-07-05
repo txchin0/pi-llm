@@ -10,7 +10,25 @@ import {
 } from '../../src/integrations/oauth/oauthService.js';
 import { OAuthStateError } from '../../src/integrations/oauth/oauthStateStore.js';
 import type { OAuthService } from '../../src/integrations/oauth/oauthService.js';
+import { authHeaders } from '../helpers/auth.js';
 import { buildTestServer } from '../helpers/buildTestServer.js';
+
+type TestApp = Awaited<ReturnType<typeof buildTestServer>>;
+
+/** Registers a user (if needed) and mints a single-use OAuth connect token. */
+async function mintConnectToken(app: TestApp, userId = 'web-user'): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/oauth/connect-token',
+    headers: await authHeaders(app, userId),
+  });
+
+  if (response.statusCode !== 200) {
+    throw new Error(`connect token mint failed: ${response.body}`);
+  }
+
+  return response.json<{ connect_token: string }>().connect_token;
+}
 
 function createStubOAuthService(overrides: Partial<OAuthService> = {}): OAuthService {
   const start = vi.fn(() =>
@@ -61,13 +79,89 @@ describe('oauth routes', () => {
     });
   }
 
-  it('GET /v1/oauth/:providerId/start redirects to the provider auth URL', async () => {
+  it('POST /v1/oauth/connect-token requires a bearer token', async () => {
+    const app = await createApp(createStubOAuthService());
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/oauth/connect-token',
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'unauthorized' });
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/start redirects using a minted connect token', async () => {
     const start = vi.fn(() =>
       Promise.resolve({
         ok: true as const,
         authUrl: 'https://accounts.google.com/o/oauth2/auth?client_id=test',
       }),
     );
+    const oauthService = createStubOAuthService({ start });
+    const app = await createApp(oauthService);
+    const connectToken = await mintConnectToken(app, 'web-user');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/start',
+      query: { connect_token: connectToken },
+    });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe(
+      'https://accounts.google.com/o/oauth2/auth?client_id=test',
+    );
+    expect(start).toHaveBeenCalledWith('web-user', 'google');
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/start rejects a reused connect token', async () => {
+    const oauthService = createStubOAuthService();
+    const app = await createApp(oauthService);
+    const connectToken = await mintConnectToken(app, 'web-user');
+
+    const first = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/start',
+      query: { connect_token: connectToken },
+    });
+    expect(first.statusCode).toBe(302);
+
+    const second = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/start',
+      query: { connect_token: connectToken },
+    });
+    expect(second.statusCode).toBe(401);
+    expect(second.json()).toMatchObject({ code: 'invalid_connect_token' });
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/start rejects an unknown connect token', async () => {
+    const start = vi.fn();
+    const oauthService = createStubOAuthService({ start });
+    const app = await createApp(oauthService);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/start',
+      query: { connect_token: 'oct_forged' },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'invalid_connect_token' });
+    expect(start).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('GET /v1/oauth/:providerId/start rejects a legacy user_id query', async () => {
+    const start = vi.fn();
     const oauthService = createStubOAuthService({ start });
     const app = await createApp(oauthService);
 
@@ -77,11 +171,9 @@ describe('oauth routes', () => {
       query: { user_id: 'web-user' },
     });
 
-    expect(response.statusCode).toBe(302);
-    expect(response.headers.location).toBe(
-      'https://accounts.google.com/o/oauth2/auth?client_id=test',
-    );
-    expect(start).toHaveBeenCalledWith('web-user', 'google');
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'validation_error' });
+    expect(start).not.toHaveBeenCalled();
 
     await app.close();
   });
@@ -101,7 +193,7 @@ describe('oauth routes', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/oauth/google/start',
-      query: { user_id: 'web-user' },
+      query: { connect_token: await mintConnectToken(app, 'web-user') },
     });
 
     expect(response.statusCode).toBe(400);
@@ -327,7 +419,7 @@ describe('oauth routes', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/oauth/google/status',
-      query: { user_id: 'web-user' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     expect(response.statusCode).toBe(200);
@@ -343,7 +435,21 @@ describe('oauth routes', () => {
     await app.close();
   });
 
-  it('DELETE /v1/oauth/:providerId disconnects and returns 204', async () => {
+  it('GET /v1/oauth/:providerId/status requires a bearer token', async () => {
+    const app = await createApp(createStubOAuthService());
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/oauth/google/status',
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'unauthorized' });
+
+    await app.close();
+  });
+
+  it('DELETE /v1/oauth/:providerId disconnects the authenticated user and returns 204', async () => {
     const disconnect = vi.fn(() => Promise.resolve());
     const oauthService = createStubOAuthService({ disconnect });
     const app = await createApp(oauthService);
@@ -351,7 +457,7 @@ describe('oauth routes', () => {
     const response = await app.inject({
       method: 'DELETE',
       url: '/v1/oauth/google',
-      query: { user_id: 'web-user' },
+      headers: await authHeaders(app, 'web-user'),
     });
 
     expect(response.statusCode).toBe(204);
@@ -368,7 +474,7 @@ describe('oauth routes', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/v1/oauth/unknown/start',
-      query: { user_id: 'web-user' },
+      query: { connect_token: await mintConnectToken(app, 'web-user') },
     });
 
     expect(response.statusCode).toBe(404);
@@ -381,14 +487,14 @@ describe('oauth routes', () => {
   });
 
   it('does not register oauth routes when oauthService is omitted', async () => {
-    const app = buildTestServer({
+    const app = await buildTestServer({
       requestIdFactory: () => 'req_test00000001',
     });
 
     const response = await app.inject({
       method: 'GET',
       url: '/v1/oauth/google/start',
-      query: { user_id: 'web-user' },
+      query: { connect_token: 'oct_any' },
     });
 
     expect(response.statusCode).toBe(404);

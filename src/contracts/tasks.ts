@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 import type { TaskListRecord } from '../queue/taskTypes.js';
 import { TaskStatusSchema } from '../queue/taskTypes.js';
-import { UserIdSchema } from './respond.js';
 
 const DEFAULT_HTTP_STATUSES = ['pending', 'running'] as const;
 
@@ -21,7 +20,8 @@ function parseStatusQuery(value: unknown): string[] | undefined {
 
 export const ListTasksQuerySchema = z
   .object({
-    user_id: UserIdSchema,
+    /** Ignored: identity comes from the access token. Accepted so pre-auth clients don't 400. */
+    user_id: z.string().optional(),
     status: z.preprocess(
       parseStatusQuery,
       z.array(TaskStatusSchema).min(1).optional(),
@@ -30,12 +30,14 @@ export const ListTasksQuerySchema = z
   })
   .strict()
   .transform((query) => ({
-    userId: query.user_id,
     statuses: query.status ?? [...DEFAULT_HTTP_STATUSES],
     limit: query.limit ?? 100,
   }));
 
-export type ParsedListTasksQuery = z.infer<typeof ListTasksQuerySchema>;
+/** A validated list query with the authenticated user id attached. */
+export type ParsedListTasksQuery = z.infer<typeof ListTasksQuerySchema> & {
+  userId: string;
+};
 
 export const TaskSummarySchema = z
   .object({
