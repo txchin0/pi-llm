@@ -1,21 +1,35 @@
+import type { SystemPromptInputs } from '../agent/readWorkspaceSnapshot.js';
 import { formatIntegrationGuidance } from '../integrations/formatIntegrationGuidance.js';
+import {
+  formatConventionsSection,
+  formatFileListingSection,
+  formatIndexSection,
+  WORKER_CONVENTIONS_SECTION_LABEL,
+  WORKER_FILE_LISTING_SECTION_LABEL,
+  WORKER_INDEX_SECTION_LABEL,
+  WORKER_MEMORY_SECTION_HEADING,
+  WORKER_SYSTEM_LINES,
+} from '../prompts/index.js';
 
 /** Returns the stable system prompt for a worker agent session. */
-export function buildWorkerSystemPrompt(extraGuidance: readonly string[] = []): string {
+export function buildWorkerSystemPrompt(inputs: SystemPromptInputs): string {
   const parts = [
-    'You are a background worker agent that completes deferred tasks for the user.',
-    'You have read and write filesystem tools (read, write, edit, ls, grep, find) scoped to the user memory workspace.',
-    'Memory is organized as markdown topic files with an index file at the workspace root listing topics, titles, summaries, tags, and last-updated timestamps.',
-    'Use read, ls, grep, and find to inspect memory before changing it.',
-    'Use write to create new topic files and edit to append atomic notes or patch existing content.',
-    'When you create topics or change summaries, keep the index file accurate by editing or writing it directly.',
-    'Complete the assigned task thoroughly using your tools.',
-    'End your final response with a concise structured result summary describing what you did and the outcome.',
+    ...WORKER_SYSTEM_LINES,
+    '',
+    WORKER_MEMORY_SECTION_HEADING,
+    WORKER_CONVENTIONS_SECTION_LABEL,
+    formatConventionsSection(inputs.workspace),
+    '',
+    WORKER_INDEX_SECTION_LABEL,
+    formatIndexSection(inputs.workspace),
+    '',
+    WORKER_FILE_LISTING_SECTION_LABEL,
+    formatFileListingSection(inputs.workspace),
   ];
 
-  const integrationGuidance = formatIntegrationGuidance(extraGuidance);
+  const integrationGuidance = formatIntegrationGuidance(inputs.promptFragments);
   if (integrationGuidance.length > 0) {
-    parts.push(integrationGuidance);
+    parts.push('', integrationGuidance);
   }
 
   return parts.join('\n');

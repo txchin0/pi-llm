@@ -19,10 +19,12 @@ import type { AppLogger } from '../logging/types.js';
 
 import { createAgentResourceLoader } from './createAgentResourceLoader.js';
 import { ensureUserWorkspace } from './ensureUserWorkspace.js';
+import { readWorkspaceSnapshot } from './readWorkspaceSnapshot.js';
+import type { SystemPromptInputs } from './readWorkspaceSnapshot.js';
 
 export type AgentSessionRoleSpec = {
   baseTools: readonly string[];
-  buildSystemPrompt: (promptFragments: string[]) => string;
+  buildSystemPrompt: (inputs: SystemPromptInputs) => string;
   settings: {
     compaction: { enabled: false };
     retry: { enabled: boolean; maxRetries?: number };
@@ -68,10 +70,16 @@ export async function buildRoleAgentSession(
   );
   assertToolAllowlistSync(spec.baseTools, integrationExtras.toolNames);
 
+  const workspace = await readWorkspaceSnapshot(options.userMemoryWorkspace);
+
   const resourceLoader = await createAgentResourceLoader({
     cwd: options.userMemoryWorkspace,
     dataRoot: options.dataRoot,
-    systemPrompt: spec.buildSystemPrompt(integrationExtras.promptFragments),
+    systemPrompt: spec.buildSystemPrompt({
+      promptFragments: integrationExtras.promptFragments,
+      workerCapabilities: [],
+      workspace,
+    }),
     settingsManager,
     extensionFactories: [
       ...spec.roleExtensionFactories,

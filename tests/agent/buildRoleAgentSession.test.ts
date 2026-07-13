@@ -6,6 +6,16 @@ const mocks = vi.hoisted(() => {
 
   return {
     ensureUserWorkspace: vi.fn().mockResolvedValue(undefined),
+    readWorkspaceSnapshot: vi.fn().mockResolvedValue({
+      indexMarkdown: '',
+      conventionsMarkdown: '',
+      fileListing: [],
+      fieldTruncation: {
+        index: false,
+        conventions: false,
+        fileListing: false,
+      },
+    }),
     createAgentResourceLoader: vi.fn().mockResolvedValue({ resourceLoader: true }),
     createPiAgentSession: vi.fn().mockResolvedValue({
       session: { id: 'sess_test' },
@@ -26,6 +36,10 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('../../src/agent/ensureUserWorkspace.js', () => ({
   ensureUserWorkspace: mocks.ensureUserWorkspace,
+}));
+
+vi.mock('../../src/agent/readWorkspaceSnapshot.js', () => ({
+  readWorkspaceSnapshot: mocks.readWorkspaceSnapshot,
 }));
 
 vi.mock('../../src/agent/createAgentResourceLoader.js', () => ({
@@ -78,6 +92,19 @@ describe('buildRoleAgentSession', () => {
       callOrder.push('ensureUserWorkspace');
       return Promise.resolve();
     });
+    mocks.readWorkspaceSnapshot.mockImplementation(() => {
+      callOrder.push('readWorkspaceSnapshot');
+      return Promise.resolve({
+        indexMarkdown: '',
+        conventionsMarkdown: '',
+        fileListing: [],
+        fieldTruncation: {
+          index: false,
+          conventions: false,
+          fileListing: false,
+        },
+      });
+    });
     mocks.createPiAgentSession.mockImplementation(() => {
       callOrder.push('createPiAgentSession');
       return Promise.resolve({
@@ -91,7 +118,7 @@ describe('buildRoleAgentSession', () => {
       role: 'worker',
       spec: {
         baseTools: WORKER_BASE_TOOLS,
-        buildSystemPrompt: (fragments) => `worker:${fragments.join(',')}`,
+        buildSystemPrompt: (inputs) => `worker:${inputs.promptFragments.join(',')}`,
         settings: { compaction: { enabled: false }, retry: { enabled: false } },
         roleExtensionFactories: [mocks.roleExtensionFactory],
         extensionLoadError: {
@@ -101,7 +128,11 @@ describe('buildRoleAgentSession', () => {
       },
     });
 
-    expect(callOrder).toEqual(['ensureUserWorkspace', 'createPiAgentSession']);
+    expect(callOrder).toEqual([
+      'ensureUserWorkspace',
+      'readWorkspaceSnapshot',
+      'createPiAgentSession',
+    ]);
   });
 
   it('asserts tool allowlist sync with spec base tools', async () => {
@@ -183,7 +214,7 @@ describe('buildRoleAgentSession', () => {
       role: 'worker',
       spec: {
         baseTools: WORKER_BASE_TOOLS,
-        buildSystemPrompt: (fragments) => `worker:${fragments.join(',')}`,
+        buildSystemPrompt: (inputs) => `worker:${inputs.promptFragments.join(',')}`,
         settings: { compaction: { enabled: false }, retry: { enabled: false } },
         roleExtensionFactories: [mocks.roleExtensionFactory],
         extensionLoadError: {

@@ -88,27 +88,14 @@ async function seedFromTemplate(
 }
 
 /**
- * Seeds the user memory workspace from the repo template when uninitialized.
- *
- * A workspace is initialized when `index.md` exists at its root. Concurrent
- * first-session calls for the same user may race; the sentinel is re-checked
- * after creating the workspace directory.
+ * Seeds any template files missing from the user memory workspace; never
+ * overwrites existing files.
  */
 export async function ensureUserWorkspace(
   workspacePath: string,
   templateDir: string = DEFAULT_TEMPLATE_DIR,
 ): Promise<void> {
-  const indexPath = join(workspacePath, INDEX_FILE);
-  if (await pathExists(indexPath)) {
-    return;
-  }
-
   await assertTemplateReady(templateDir);
   await mkdir(workspacePath, { recursive: true });
-
-  if (await pathExists(indexPath)) {
-    return;
-  }
-
   await seedFromTemplate(workspacePath, templateDir);
 }
