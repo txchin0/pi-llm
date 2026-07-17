@@ -273,6 +273,119 @@ describe('createSqliteTaskQueue', () => {
     expect(recovered?.status).toBe('pending');
   });
 
+  it('stamps completedAt on terminal transitions and clears it on requeue', async () => {
+    const task = await queue.enqueue({
+      userId: 'web-user',
+      description: 'complete me',
+      context: { turns: [] },
+    });
+
+    await queue.claimNextPending();
+    await queue.markCompleted(task.id, 'done');
+
+    const completed = await queue.getById('web-user', task.id);
+    expect(completed?.completedAt).toBe(completed?.updatedAt);
+
+    const failing = await queue.enqueue({
+      userId: 'web-user',
+      description: 'fail me',
+      context: { turns: [] },
+    });
+    await queue.claimNextPending();
+    await queue.markFailed(failing.id, 'boom');
+
+    const failed = await queue.getById('web-user', failing.id);
+    expect(failed?.completedAt).toBe(failed?.updatedAt);
+
+    const retried = await queue.enqueue({
+      userId: 'web-user',
+      description: 'retry me',
+      context: { turns: [] },
+    });
+    await queue.claimNextPending();
+    await queue.requeue(retried.id, 'transient');
+
+    const requeued = await queue.getById('web-user', retried.id);
+    expect(requeued?.completedAt).toBeNull();
+  });
+
+  it('windows terminal tasks by completedAfter while active tasks always pass', async () => {
+    const active = await queue.enqueue({
+      userId: 'web-user',
+      description: 'old pending task',
+      context: { turns: [] },
+    });
+    const recent = await queue.enqueue({
+      userId: 'web-user',
+      description: 'recently completed',
+      context: { turns: [] },
+    });
+    const stale = await queue.enqueue({
+      userId: 'web-user',
+      description: 'completed long ago',
+      context: { turns: [] },
+    });
+
+    const sqlite = new Database(dbPath);
+    const markDone = sqlite.prepare(
+      'UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?',
+    );
+    markDone.run('completed', '2026-07-16T00:00:00.000Z', recent.id);
+    markDone.run('completed', '2026-07-01T00:00:00.000Z', stale.id);
+    sqlite.close();
+
+    const listed = await queue.listByUser('web-user', {
+      statuses: ['pending', 'running', 'completed', 'failed'],
+      completedAfter: '2026-07-14T00:00:00.000Z',
+    });
+
+    expect(listed.map((task) => task.id)).toEqual([active.id, recent.id]);
+    expect(listed[1]?.completedAt).toBe('2026-07-16T00:00:00.000Z');
+  });
+
+  it('dismisses finished tasks and hides them from every list', async () => {
+    const task = await queue.enqueue({
+      userId: 'web-user',
+      description: 'dismiss me',
+      context: { turns: [] },
+    });
+    await queue.claimNextPending();
+    await queue.markCompleted(task.id, 'done');
+
+    expect(await queue.dismiss('web-user', task.id)).toBe('dismissed');
+    // Idempotent: repeating the dismiss still succeeds.
+    expect(await queue.dismiss('web-user', task.id)).toBe('dismissed');
+
+    const listed = await queue.listByUser('web-user', {
+      statuses: ['pending', 'running', 'completed', 'failed'],
+    });
+    expect(listed).toHaveLength(0);
+
+    const sqlite = new Database(dbPath);
+    const row = sqlite
+      .prepare(
+        'SELECT dismissed_at FROM tasks WHERE id = ?',
+      )
+      .get(task.id) as { dismissed_at: string | null };
+    sqlite.close();
+    expect(row.dismissed_at).not.toBeNull();
+  });
+
+  it('refuses to dismiss active or foreign tasks', async () => {
+    const pending = await queue.enqueue({
+      userId: 'web-user',
+      description: 'still pending',
+      context: { turns: [] },
+    });
+
+    expect(await queue.dismiss('web-user', pending.id)).toBe('not_terminal');
+    expect(await queue.dismiss('other-user', pending.id)).toBe('not_found');
+    expect(await queue.dismiss('web-user', 'task_missing')).toBe('not_found');
+
+    const listed = await queue.listByUser('web-user', { statuses: ['pending'] });
+    expect(listed).toHaveLength(1);
+  });
+
   it('rejects state transitions when the task is not running', async () => {
     const task = await queue.enqueue({
       userId: 'web-user',

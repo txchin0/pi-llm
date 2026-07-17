@@ -7,7 +7,7 @@ import {
   type BuildServerOptions,
 } from '../../src/server/buildServer.js';
 import { createEmptyIntegrationStore } from './emptyIntegrationStore.js';
-import { createMockTaskQueue } from './mockTaskQueue.js';
+import { createMockUserTaskQueue } from './mockTaskQueue.js';
 import { createStubRespondService } from './stubRespondService.js';
 
 /** Creates a real auth service backed by an in-memory SQLite store. */
@@ -29,7 +29,7 @@ export async function buildTestServer(
 ) {
   return buildServer({
     service: createStubRespondService(),
-    taskQueue: createMockTaskQueue(),
+    taskQueue: createMockUserTaskQueue(),
     integrationStore: createEmptyIntegrationStore(),
     authService: overrides.authService ?? (await createTestAuthService()),
     ...overrides,

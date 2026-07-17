@@ -15,6 +15,13 @@
       "when": 1783219403920,
       "tag": "0001_lying_masked_marvel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784253707701,
+      "tag": "0002_furry_betty_ross",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,10 @@ export const tasks = sqliteTable('tasks', {
   retryCount: integer('retry_count').notNull().default(0),
   result: text('result'),
   errorMessage: text('error_message'),
+  /** Set on the terminal completed/failed transition; cleared on requeue. */
+  completedAt: text('completed_at'),
+  /** Set when the user dismisses a finished task; dismissed rows are hidden from list queries. */
+  dismissedAt: text('dismissed_at'),
 }, (table) => [
   index('tasks_user_id_created_at_idx').on(table.userId, table.createdAt),
 ]);

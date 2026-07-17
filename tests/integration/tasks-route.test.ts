@@ -18,6 +18,21 @@ function setTaskStatus(dbPath: string, taskId: string, status: TaskStatus): void
   db.close();
 }
 
+function finishTask(
+  dbPath: string,
+  taskId: string,
+  status: 'completed' | 'failed',
+  completedAt: string,
+): void {
+  const db = new Database(dbPath);
+  db.prepare('UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?').run(
+    status,
+    completedAt,
+    taskId,
+  );
+  db.close();
+}
+
 describe('GET /v1/tasks', () => {
   let tempDir: string;
   let dbPath: string;
@@ -213,6 +228,102 @@ describe('GET /v1/tasks', () => {
     await app.close();
   });
 
+  it('windows finished tasks with completed_after and includes completed_at', async () => {
+    const active = await queue.enqueue({
+      userId: 'web-user',
+      description: 'active task',
+      context: { turns: [] },
+    });
+    const recent = await queue.enqueue({
+      userId: 'web-user',
+      description: 'recently finished',
+      context: { turns: [] },
+    });
+    const stale = await queue.enqueue({
+      userId: 'web-user',
+      description: 'finished long ago',
+      context: { turns: [] },
+    });
+
+    finishTask(dbPath, recent.id, 'completed', '2026-07-16T12:00:00.000Z');
+    finishTask(dbPath, stale.id, 'failed', '2026-07-01T12:00:00.000Z');
+
+    const app = await createApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/tasks',
+      query: {
+        status: 'pending,running,completed,failed',
+        completed_after: '2026-07-14T00:00:00.000Z',
+      },
+      headers: await authHeaders(app, 'web-user'),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = ListTasksResponseSchema.parse(response.json());
+    expect(body.tasks.map((task) => task.id)).toEqual([active.id, recent.id]);
+    expect(body.tasks[0]?.completed_at).toBeNull();
+    expect(body.tasks[1]?.completed_at).toBe('2026-07-16T12:00:00.000Z');
+
+    await app.close();
+  });
+
+  it('normalizes offset and no-ms completed_after before windowing', async () => {
+    const recent = await queue.enqueue({
+      userId: 'web-user',
+      description: 'boundary finished',
+      context: { turns: [] },
+    });
+    const stale = await queue.enqueue({
+      userId: 'web-user',
+      description: 'older finished',
+      context: { turns: [] },
+    });
+
+    // Equal to 2026-07-14T00:00:00.000Z; must survive offset / no-ms query forms.
+    finishTask(dbPath, recent.id, 'completed', '2026-07-14T00:00:00.000Z');
+    finishTask(dbPath, stale.id, 'failed', '2026-07-13T23:59:59.999Z');
+
+    const app = await createApp();
+    const headers = await authHeaders(app, 'web-user');
+
+    for (const completed_after of [
+      '2026-07-14T10:00:00+10:00',
+      '2026-07-14T00:00:00Z',
+    ]) {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/v1/tasks',
+        query: {
+          status: 'completed,failed',
+          completed_after,
+        },
+        headers,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = ListTasksResponseSchema.parse(response.json());
+      expect(body.tasks.map((task) => task.id)).toEqual([recent.id]);
+    }
+
+    await app.close();
+  });
+
+  it('returns 400 for a malformed completed_after', async () => {
+    const app = await createApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/tasks',
+      query: { completed_after: 'yesterday' },
+      headers: await authHeaders(app, 'web-user'),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ code: 'validation_error' });
+
+    await app.close();
+  });
+
   it('includes access-control-allow-origin for cross-origin GET requests', async () => {
     const app = await createApp();
 
@@ -227,6 +338,140 @@ describe('GET /v1/tasks', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers['access-control-allow-origin']).toBe('http://localhost');
+
+    await app.close();
+  });
+});
+
+describe('POST /v1/tasks/:taskId/dismiss', () => {
+  let tempDir: string;
+  let dbPath: string;
+  let queue: Awaited<ReturnType<typeof createSqliteTaskQueue>>;
+
+  beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'pi-llm-tasks-dismiss-'));
+    dbPath = join(tempDir, 'tasks.sqlite');
+    queue = await createSqliteTaskQueue({
+      dbPath,
+      migrationsFolder: resolveMigrationsFolder(),
+    });
+  });
+
+  afterEach(async () => {
+    queue.close();
+    await rm(tempDir, { recursive: true, force: true });
+  });
+
+  async function createApp() {
+    return buildTestServer({
+      taskQueue: queue,
+      requestIdFactory: () => 'req_test00000001',
+    });
+  }
+
+  async function enqueueFinishedTask(userId: string): Promise<string> {
+    const task = await queue.enqueue({
+      userId,
+      description: 'finished task',
+      context: { turns: [] },
+    });
+    finishTask(dbPath, task.id, 'completed', '2026-07-16T12:00:00.000Z');
+    return task.id;
+  }
+
+  it('dismisses a finished task and removes it from lists', async () => {
+    const taskId = await enqueueFinishedTask('web-user');
+
+    const app = await createApp();
+    const headers = await authHeaders(app, 'web-user');
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/tasks/${taskId}/dismiss`,
+      headers,
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.body).toBe('');
+
+    const list = await app.inject({
+      method: 'GET',
+      url: '/v1/tasks',
+      query: { status: 'completed,failed' },
+      headers,
+    });
+    const body = ListTasksResponseSchema.parse(list.json());
+    expect(body.tasks).toHaveLength(0);
+
+    // Idempotent: a repeated dismiss still succeeds.
+    const again = await app.inject({
+      method: 'POST',
+      url: `/v1/tasks/${taskId}/dismiss`,
+      headers,
+    });
+    expect(again.statusCode).toBe(204);
+
+    await app.close();
+  });
+
+  it('returns 409 for a task that is not finished', async () => {
+    const task = await queue.enqueue({
+      userId: 'web-user',
+      description: 'still pending',
+      context: { turns: [] },
+    });
+
+    const app = await createApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/tasks/${task.id}/dismiss`,
+      headers: await authHeaders(app, 'web-user'),
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ code: 'task_not_terminal' });
+
+    await app.close();
+  });
+
+  it("returns 404 for another user's task and for unknown ids", async () => {
+    const taskId = await enqueueFinishedTask('user-a');
+
+    const app = await createApp();
+    const headersB = await authHeaders(app, 'user-b');
+
+    const foreign = await app.inject({
+      method: 'POST',
+      url: `/v1/tasks/${taskId}/dismiss`,
+      headers: headersB,
+    });
+    expect(foreign.statusCode).toBe(404);
+    expect(foreign.json()).toMatchObject({ code: 'not_found' });
+
+    const missing = await app.inject({
+      method: 'POST',
+      url: '/v1/tasks/task_missing/dismiss',
+      headers: headersB,
+    });
+    expect(missing.statusCode).toBe(404);
+
+    // The foreign dismiss must not have touched user-a's task.
+    const listed = await queue.listByUser('user-a', {
+      statuses: ['completed', 'failed'],
+    });
+    expect(listed.map((task) => task.id)).toEqual([taskId]);
+
+    await app.close();
+  });
+
+  it('returns 401 without a bearer token', async () => {
+    const app = await createApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/tasks/task_whatever/dismiss',
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ code: 'unauthorized' });
 
     await app.close();
   });

@@ -12,7 +12,7 @@ import {
   createRootLogger,
   type AppLogger,
 } from '../logging/index.js';
-import type { TaskQueue } from '../queue/taskQueue.js';
+import type { UserTaskQueue } from '../queue/taskQueue.js';
 import type { IntegrationStore } from '../integrations/store/integrationStore.js';
 import { createInMemoryConnectTokenStore } from '../integrations/oauth/connectTokenStore.js';
 import { OAuthController } from '../integrations/oauth/oauthController.js';
@@ -23,8 +23,9 @@ import {
   RespondController,
   type RespondControllerDependencies,
 } from '../respond/respondController.js';
+import { DismissTaskController } from '../tasks/dismissTaskController.js';
 import { ListTasksController } from '../tasks/listTasksController.js';
-import { createTaskListService } from '../tasks/taskListService.js';
+import { createTaskService } from '../tasks/taskService.js';
 import { createAuthenticate } from './authenticate.js';
 import { registerAuthRoute } from './routes/auth.js';
 import { registerIntegrationsRoute } from './routes/integrations.js';
@@ -34,7 +35,7 @@ import { registerTasksRoute } from './routes/tasks.js';
 
 export type BuildServerOptions = RespondControllerDependencies & {
   logger?: AppLogger;
-  taskQueue: TaskQueue;
+  taskQueue: UserTaskQueue;
   integrationStore: IntegrationStore;
   authService: AuthService;
   oauthService?: OAuthService;
@@ -110,12 +111,21 @@ export function buildServer(options: BuildServerOptions) {
   });
   registerRespondRoute(app, { controller, authenticate, logger });
 
-  const taskListService = createTaskListService({ taskQueue });
+  const taskService = createTaskService({ taskQueue });
   const listTasksController = new ListTasksController({
-    service: taskListService,
+    service: taskService,
     logger,
   });
-  registerTasksRoute(app, { controller: listTasksController, authenticate, logger });
+  const dismissTaskController = new DismissTaskController({
+    service: taskService,
+    logger,
+  });
+  registerTasksRoute(app, {
+    controller: listTasksController,
+    dismissController: dismissTaskController,
+    authenticate,
+    logger,
+  });
 
   const integrationService = createIntegrationService({ store: integrationStore });
   const integrationsController = new IntegrationsController({

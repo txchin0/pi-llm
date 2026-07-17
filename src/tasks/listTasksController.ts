@@ -3,10 +3,10 @@ import {
   type ListTasksResponse,
 } from '../contracts/tasks.js';
 import { createChildLogger, createRootLogger, type AppLogger } from '../logging/index.js';
-import type { TaskListService } from './taskListService.js';
+import type { TaskService } from './taskService.js';
 
 export type ListTasksControllerDependencies = {
-  service: TaskListService;
+  service: TaskService;
   logger?: AppLogger;
 };
 
@@ -31,12 +31,12 @@ type HandleOptions = {
   logger?: AppLogger;
 };
 
-/** Validates list-tasks queries and delegates to the task list service. */
+/** Validates list-tasks queries and delegates to the task service. */
 export class ListTasksController {
-  private readonly service: TaskListService;
+  private readonly service: TaskService;
   private readonly logger: AppLogger;
 
-  /** Creates a controller with the task list service and optional logger. */
+  /** Creates a controller with the task service and optional logger. */
   constructor(dependencies: ListTasksControllerDependencies) {
     this.service = dependencies.service;
     this.logger = dependencies.logger ?? createRootLogger();
@@ -61,7 +61,8 @@ export class ListTasksController {
         status: 400,
         body: {
           code: 'validation_error',
-          message: 'Query accepts optional status and limit parameters.',
+          message:
+            'Query accepts optional status, limit, and completed_after parameters.',
         },
       };
     }

@@ -227,7 +227,7 @@ The surface agent can answer questions about pending or recently completed tasks
 | Drizzle schema + migration | `src/queue/schema.ts`, `drizzle/` |
 | SQLite repository | `src/queue/sqliteTaskQueue.ts` |
 | Conversation excerpt builder | `src/queue/extractRecentTurns.ts` |
-| Task list service | `src/tasks/taskListService.ts` |
+| Task service | `src/tasks/taskService.ts` |
 | Tasks HTTP route | `src/server/routes/tasks.ts`, `src/tasks/listTasksController.ts` |
 | Surface tool | `src/surface/extensions/scheduleTaskTool.ts`, registered in `surfaceExtension.ts` |
 | Bootstrap wiring | `src/index.ts` creates queue; `SurfaceSessionRegistry` passes queue into session factory |

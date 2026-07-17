@@ -1,4 +1,4 @@
-import type { TaskQueue } from '../../src/queue/taskQueue.js';
+import type { TaskQueue, UserTaskQueue } from '../../src/queue/taskQueue.js';
 
 /** Minimal {@link TaskQueue} stub for surface-path unit tests. */
 export function createMockTaskQueue(
@@ -13,6 +13,19 @@ export function createMockTaskQueue(
     },
     listByUser() {
       return Promise.resolve([]);
+    },
+    ...overrides,
+  };
+}
+
+/** Minimal {@link UserTaskQueue} stub for HTTP task-route tests. */
+export function createMockUserTaskQueue(
+  overrides: Partial<UserTaskQueue> = {},
+): UserTaskQueue {
+  return {
+    ...createMockTaskQueue(overrides),
+    dismiss() {
+      return Promise.resolve('not_found');
     },
     ...overrides,
   };

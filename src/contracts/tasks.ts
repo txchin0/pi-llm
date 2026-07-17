@@ -27,11 +27,21 @@ export const ListTasksQuerySchema = z
       z.array(TaskStatusSchema).min(1).optional(),
     ),
     limit: z.coerce.number().int().min(1).max(100).optional(),
+    /**
+     * ISO-8601 lower bound for finished tasks: completed/failed rows that
+     * finished earlier are excluded. Active rows are unaffected.
+     * Normalized to UTC `toISOString()` so SQLite string compares match stored values.
+     */
+    completed_after: z.iso.datetime({ offset: true }).optional(),
   })
   .strict()
   .transform((query) => ({
     statuses: query.status ?? [...DEFAULT_HTTP_STATUSES],
     limit: query.limit ?? 100,
+    completedAfter:
+      query.completed_after === undefined
+        ? undefined
+        : new Date(query.completed_after).toISOString(),
   }));
 
 /** A validated list query with the authenticated user id attached. */
@@ -49,6 +59,8 @@ export const TaskSummarySchema = z
     retry_count: z.number().int().nonnegative(),
     result: z.string().nullable(),
     error_message: z.string().nullable(),
+    /** ISO timestamp of the completed/failed transition; null while active. */
+    completed_at: z.string().nullable(),
   })
   .strict();
 
@@ -80,5 +92,15 @@ export function toTaskSummary(record: TaskListRecord): TaskSummary {
     retry_count: record.retryCount,
     result: record.result,
     error_message: record.errorMessage,
+    completed_at: record.completedAt,
   });
 }
+
+export const DismissTaskErrorSchema = z
+  .object({
+    code: z.enum(['not_found', 'task_not_terminal']),
+    message: z.string(),
+  })
+  .strict();
+
+export type DismissTaskError = z.infer<typeof DismissTaskErrorSchema>;

@@ -3,26 +3,29 @@ import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import Database from 'better-sqlite3';
-import { and, asc, eq, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { AppLogger } from '../logging/types.js';
 import { tasks } from './schema.js';
-import type { WorkerTaskQueue } from './taskQueue.js';
+import type { UserTaskQueue, WorkerTaskQueue } from './taskQueue.js';
 import {
   EnqueueTaskInputSchema,
   TaskContextSchema,
   TaskRecordSchema,
   TaskListRecordSchema,
+  TERMINAL_TASK_STATUSES,
+  isTerminalTaskStatus,
   type TaskListRecord,
   type TaskRecord,
   type TaskStatus,
 } from './taskTypes.js';
 
-export type SqliteTaskQueue = WorkerTaskQueue & {
-  close(): void;
-};
+export type SqliteTaskQueue = WorkerTaskQueue &
+  UserTaskQueue & {
+    close(): void;
+  };
 
 export type CreateSqliteTaskQueueOptions = {
   dbPath: string;
@@ -45,6 +48,7 @@ type TaskListRow = Pick<
   | 'retryCount'
   | 'result'
   | 'errorMessage'
+  | 'completedAt'
 >;
 
 /** Maps a summary row to a validated list record without parsing context. */
@@ -58,12 +62,13 @@ function mapRowToTaskListRecord(row: TaskListRow): TaskListRecord {
     retryCount: row.retryCount,
     result: row.result,
     errorMessage: row.errorMessage,
+    completedAt: row.completedAt,
   });
 }
 
-type RunningTaskTransitionPatch = Pick<
+type RunningTaskTransitionFields = Pick<
   typeof tasks.$inferInsert,
-  'status' | 'result' | 'errorMessage'
+  'status' | 'result' | 'errorMessage' | 'completedAt'
 > & {
   retryCount?: number | SQL;
 };
@@ -92,6 +97,7 @@ function mapRowToTaskRecord(row: typeof tasks.$inferSelect): TaskRecord {
     retryCount: row.retryCount,
     result: row.result,
     errorMessage: row.errorMessage,
+    completedAt: row.completedAt,
   });
 }
 
@@ -135,16 +141,19 @@ export async function createSqliteTaskQueue(
     return mapRowToTaskRecord({ ...row, status: 'running', updatedAt: now });
   });
 
-  /** Applies a guarded running→* transition, asserts exactly one row updated, and logs. */
+  /**
+   * Applies a guarded running→* transition. `buildPatch` receives the shared
+   * transition timestamp so completedAt and updatedAt stay aligned.
+   */
   function transitionRunningTask(
     taskId: string,
-    patch: RunningTaskTransitionPatch,
+    buildPatch: (now: string) => RunningTaskTransitionFields,
     logMeta: { event: string; message: string },
   ): Promise<void> {
     const now = new Date().toISOString();
     const changes = db
       .update(tasks)
-      .set({ ...patch, updatedAt: now })
+      .set({ ...buildPatch(now), updatedAt: now })
       .where(and(eq(tasks.id, taskId), eq(tasks.status, 'running')))
       .run().changes;
 
@@ -183,6 +192,8 @@ export async function createSqliteTaskQueue(
         retryCount: 0,
         result: null,
         errorMessage: null,
+        completedAt: null,
+        dismissedAt: null,
       };
 
       await db.insert(tasks).values(row);
@@ -222,8 +233,28 @@ export async function createSqliteTaskQueue(
       return row ? mapRowToTaskRecord(row) : null;
     },
 
-    async listByUser(userId, options) {
-      const limit = options.limit ?? 100;
+    async listByUser(userId, listOptions) {
+      const limit = listOptions.limit ?? 100;
+      // Soft-dismissed rows are never listed; there is no resurface query today.
+      const conditions: SQL[] = [
+        eq(tasks.userId, userId),
+        inArray(tasks.status, listOptions.statuses),
+        isNull(tasks.dismissedAt),
+      ];
+
+      if (listOptions.completedAfter !== undefined) {
+        // Canonical UTC ISO strings compare lexicographically; active rows have
+        // a null completedAt and always pass the window. HTTP callers normalize
+        // via ListTasksQuerySchema before reaching this path.
+        const completedAfterFilter = or(
+          isNull(tasks.completedAt),
+          gte(tasks.completedAt, listOptions.completedAfter),
+        );
+        if (completedAfterFilter) {
+          conditions.push(completedAfterFilter);
+        }
+      }
+
       const rows = await db
         .select({
           id: tasks.id,
@@ -234,18 +265,51 @@ export async function createSqliteTaskQueue(
           retryCount: tasks.retryCount,
           result: tasks.result,
           errorMessage: tasks.errorMessage,
+          completedAt: tasks.completedAt,
         })
         .from(tasks)
-        .where(
-          and(
-            eq(tasks.userId, userId),
-            inArray(tasks.status, options.statuses),
-          ),
-        )
+        .where(and(...conditions))
         .orderBy(asc(tasks.createdAt), asc(tasks.id))
         .limit(limit);
 
       return rows.map((row) => mapRowToTaskListRecord(row));
+    },
+
+    async dismiss(userId, taskId) {
+      const now = new Date().toISOString();
+      const changes = db
+        .update(tasks)
+        .set({ dismissedAt: now, updatedAt: now })
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            eq(tasks.userId, userId),
+            inArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
+            isNull(tasks.dismissedAt),
+          ),
+        )
+        .run().changes;
+
+      if (changes === 1) {
+        return 'dismissed';
+      }
+
+      // Nothing updated: distinguish missing/foreign, still-active, and the
+      // idempotent already-dismissed repeat.
+      const rows = await db
+        .select({ status: tasks.status, dismissedAt: tasks.dismissedAt })
+        .from(tasks)
+        .where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)))
+        .limit(1);
+
+      const row = rows[0];
+      if (!row) {
+        return 'not_found';
+      }
+      if (!isTerminalTaskStatus(row.status)) {
+        return 'not_terminal';
+      }
+      return 'dismissed';
     },
 
     claimNextPending() {
@@ -270,7 +334,7 @@ export async function createSqliteTaskQueue(
     markCompleted(taskId, result) {
       return transitionRunningTask(
         taskId,
-        { status: 'completed', result },
+        (now) => ({ status: 'completed', result, completedAt: now }),
         { event: 'task.completed', message: 'task completed' },
       );
     },
@@ -278,7 +342,7 @@ export async function createSqliteTaskQueue(
     markFailed(taskId, errorMessage) {
       return transitionRunningTask(
         taskId,
-        { status: 'failed', errorMessage },
+        (now) => ({ status: 'failed', errorMessage, completedAt: now }),
         { event: 'task.failed', message: 'task failed' },
       );
     },
@@ -286,11 +350,12 @@ export async function createSqliteTaskQueue(
     requeue(taskId, errorMessage) {
       return transitionRunningTask(
         taskId,
-        {
+        () => ({
           status: 'pending',
           retryCount: sql`${tasks.retryCount} + 1`,
           errorMessage,
-        },
+          completedAt: null,
+        }),
         { event: 'task.requeued', message: 'task requeued' },
       );
     },

@@ -23,6 +23,7 @@ function createTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
     retryCount: 0,
     result: null,
     errorMessage: null,
+    completedAt: null,
     ...overrides,
   };
 }

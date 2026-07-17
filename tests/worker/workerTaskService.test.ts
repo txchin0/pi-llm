@@ -31,6 +31,7 @@ describe('createWorkerTaskService', () => {
       retryCount: 0,
       result: null,
       errorMessage: null,
+      completedAt: null,
     };
 
     const createSession = vi
@@ -77,6 +78,7 @@ describe('createWorkerTaskService', () => {
       retryCount: 0,
       result: null,
       errorMessage: null,
+      completedAt: null,
     };
 
     const service = createWorkerTaskService({
@@ -113,6 +115,7 @@ describe('createWorkerTaskService', () => {
       retryCount: 0,
       result: null,
       errorMessage: null,
+      completedAt: null,
     };
 
     const outcomes: Array<{ kind: string }> = [];
@@ -192,6 +195,7 @@ describe('buildWorkerTaskPrompt', () => {
         retryCount: 0,
         result: null,
         errorMessage: null,
+        completedAt: null,
       },
       '2026-01-01T12:00:00.000+11:00',
     );
