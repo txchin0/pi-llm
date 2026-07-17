@@ -6,4 +6,4 @@ export const WORKER_RECENT_CONVERSATION_LABEL = 'Recent conversation:';
 
 /** Closing instruction appended to every worker task prompt. */
 export const WORKER_TASK_CLOSING_INSTRUCTION =
-  'Complete this task using your tools. End with a concise summary of what you did.';
+  'Complete this task now using your tools. Your final message must begin with "OUTCOME: done" or "OUTCOME: failed - <reason>", followed by a short summary of what changed.';

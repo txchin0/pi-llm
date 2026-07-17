@@ -48,6 +48,19 @@ describe('buildWorkerSystemPrompt', () => {
     expect(prompt).toContain('# worker conventions');
     expect(prompt).toContain('profile.md');
     expect(prompt).toContain('conventions.md');
+    expect(prompt).toContain('Memory conventions you MUST follow');
+  });
+
+  it('includes working rules and OUTCOME contract from §7.2', () => {
+    const prompt = buildWorkerSystemPrompt(systemPromptInputs());
+
+    expect(prompt).toContain('Trust the snapshot');
+    expect(prompt).toContain('Never record the same fact in two places');
+    expect(prompt).toContain('Read a file immediately before you edit it');
+    expect(prompt).toContain('OUTCOME: done');
+    expect(prompt).toContain('OUTCOME: failed');
+    expect(prompt).toContain('# Working rules');
+    expect(prompt).toContain('# Result format');
   });
 
   it('points at conventions.md instead of the old index schema', () => {

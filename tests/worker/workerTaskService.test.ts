@@ -203,4 +203,28 @@ describe('buildWorkerTaskPrompt', () => {
     expect(prompt).toContain('Task: solo task');
     expect(prompt).not.toContain('Recent conversation:');
   });
+
+  it('reminds the worker that the final message must begin with OUTCOME', () => {
+    const prompt = buildWorkerTaskPrompt(
+      {
+        id: 'task_test00000003',
+        userId: 'web-user',
+        description: 'solo task',
+        context: { turns: [] },
+        sessionId: null,
+        status: 'pending',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        retryCount: 0,
+        result: null,
+        errorMessage: null,
+        completedAt: null,
+      },
+      '2026-01-01T12:00:00.000+11:00',
+    );
+
+    expect(prompt).toContain('OUTCOME: done');
+    expect(prompt).toContain('OUTCOME: failed - <reason>');
+    expect(prompt).toContain('followed by a short summary');
+  });
 });
