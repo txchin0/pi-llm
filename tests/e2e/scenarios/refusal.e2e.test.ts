@@ -21,10 +21,11 @@ afterAll(async () => {
 describe('e2e: capability refusal', () => {
   // Acceptance scenario from docs/agent-performance-report.md §12: requests
   // for capabilities that do not exist (email) should be declined without
-  // queueing a background task the worker cannot fulfil. As-built the surface
-  // prompt does not yet enforce this (the model often schedules a task), so
-  // the no-task expectations are report-only `should` checks — upgrade them
-  // to `must` once the capability-guard prompt changes from the report land.
+  // queueing a background task the worker cannot fulfil. The surface prompt
+  // now enforces this via the §7.1 capability guard ("Never schedule a task
+  // for it"), but a local llama.cpp model won't honour it on every run, so the
+  // no-task expectations stay report-only `should` checks rather than hard CI
+  // gates. The `must` check below still guarantees the user gets a real reply.
   it('refusal-email: declines an impossible request without queueing work', async () => {
     await runScenario(handle, {
       id: 'refusal-email',

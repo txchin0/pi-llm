@@ -35,6 +35,50 @@ describe('buildSurfaceSystemPrompt', () => {
     expect(prompt).toContain('Use calendar read tools carefully.');
   });
 
+  it('includes persona, time, memory-first, deferral, and task-status sections', () => {
+    const prompt = buildSurfaceSystemPrompt(systemPromptInputs());
+
+    expect(prompt).toContain("You are the user's personal assistant.");
+    expect(prompt).toContain('# Time');
+    expect(prompt).toContain('[Current time:');
+    expect(prompt).toContain('Never mention or repeat the prefix itself.');
+    expect(prompt).toContain("Never say you don't know or don't remember until you have");
+    expect(prompt).toContain('# Deferred work');
+    expect(prompt).toContain('Never schedule a task for it');
+    expect(prompt).toContain('turning relative dates and times like "tomorrow"');
+    expect(prompt).toContain('Only schedule work the user has actually asked for.');
+    expect(prompt).toContain('# Task status');
+  });
+
+  it('renders the base capability line then one bullet per worker capability', () => {
+    const prompt = buildSurfaceSystemPrompt({
+      promptFragments: [],
+      workerCapabilities: [
+        'Manage Google Calendar: create, update, or delete events.',
+        'Manage Google Tasks: create, update, or complete todos.',
+      ],
+      workspace: emptyWorkspaceSnapshot,
+    });
+
+    expect(prompt).toContain(
+      '- Remember things: create or edit markdown topic files in the memory workspace',
+    );
+    expect(prompt).toContain('- Manage Google Calendar: create, update, or delete events.');
+    expect(prompt).toContain('- Manage Google Tasks: create, update, or complete todos.');
+  });
+
+  it('appends the index truncation marker when the index snapshot is truncated', () => {
+    const prompt = buildSurfaceSystemPrompt(
+      systemPromptInputs([], {
+        ...emptyWorkspaceSnapshot,
+        indexMarkdown: '- `profile.md` — user facts',
+        fieldTruncation: { ...emptyWorkspaceSnapshot.fieldTruncation, index: true },
+      }),
+    );
+
+    expect(prompt).toContain('…(index truncated — read index.md for the rest)');
+  });
+
   it('includes index and file listing sections but not conventions', () => {
     const prompt = buildSurfaceSystemPrompt(
       systemPromptInputs([], {
