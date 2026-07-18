@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { AgentLlmConfig } from '../../../src/config/agentLlm.js';
 import type { E2eRuntimeConfig } from './e2eEnv.js';
 import type { JudgeResult } from './judge.js';
+import type { WorkerAttemptTrace } from './workerTrace.js';
 
 export type CheckSeverity = 'must' | 'should';
 
@@ -14,10 +15,20 @@ export type CheckOutcome = {
   evidence: string;
 };
 
+export type TranscriptToolCall = {
+  name: string;
+  input: unknown;
+  /** Paired tool result payload; null when no result frame arrived. */
+  output: unknown;
+  isError: boolean;
+};
+
 export type TurnTranscript = {
   user: string;
+  /** Surface-agent thinking streamed for this turn ('' when none). */
+  thinking: string;
   assistantText: string;
-  toolCalls: Array<{ name: string; input: unknown }>;
+  toolCalls: TranscriptToolCall[];
 };
 
 export type TaskSummary = {
@@ -26,6 +37,8 @@ export type TaskSummary = {
   description: string;
   result: string | null;
   errorMessage: string | null;
+  /** Worker trace per attempt: thinking, tool steps, usage, and outcome. */
+  attempts: WorkerAttemptTrace[];
 };
 
 export type ScenarioFragment = {
@@ -37,9 +50,32 @@ export type ScenarioFragment = {
   usage: { inputTokens: number; outputTokens: number };
   checks: CheckOutcome[];
   judge: JudgeResult | null;
+  /** Rubric criteria the judge graded against (null when no judge declared). */
+  judgeRubric: string[] | null;
+  /** Exact transcript handed to the judge (null when the judge did not run). */
+  judgeInput: string | null;
   transcript: TurnTranscript[];
   tasks: TaskSummary[];
 };
+
+/**
+ * Caps a tool payload's serialized size so report fragments stay readable.
+ * Oversized payloads are replaced by a truncated JSON string with a marker.
+ */
+export function capPayload(value: unknown, maxChars = 8000): unknown {
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value) ?? 'undefined';
+  } catch {
+    return '[unserializable payload]';
+  }
+
+  if (serialized.length <= maxChars) {
+    return value;
+  }
+
+  return `${serialized.slice(0, maxChars)}… [truncated ${serialized.length - maxChars} chars]`;
+}
 
 type RoleMeta = Pick<
   AgentLlmConfig,
@@ -202,4 +238,5 @@ export function printSummary(report: E2eReport, runDir: string): void {
   }
   console.log('');
   console.log(`full report: ${join(runDir, 'report.json')}`);
+  console.log(`html report: ${join(runDir, 'report.html')}`);
 }

@@ -17,6 +17,7 @@ import { resetFakeExaCalls } from '../fakes/fakeExaMcpClient.js';
 import { runJudge, truncateForJudge, type JudgeResult } from './judge.js';
 import type { E2eAppHandle } from './buildE2eApp.js';
 import {
+  capPayload,
   writeFragment,
   type CheckOutcome,
   type CheckSeverity,
@@ -26,6 +27,7 @@ import {
 } from './report.js';
 import { parseSse } from './sse.js';
 import { waitForTerminalTask } from './waitForTask.js';
+import { readWorkerAttemptTraces } from './workerTrace.js';
 
 /*
  * Scenario file convention: every `tests/e2e/scenarios/*.e2e.test.ts` MUST
@@ -97,6 +99,8 @@ export type TurnOutcome = {
   message: string;
   sessionId: string;
   events: RespondSseEvent[];
+  /** Surface-agent thinking streamed during this turn ('' when none). */
+  thinkingText: string;
   assistantText: string;
   toolCalls: RespondToolCallEvent[];
   toolResults: RespondToolResultEvent[];
@@ -276,7 +280,8 @@ async function runTrial(
         'content-type': 'application/json',
         ...auth,
       },
-      payload: { session_id: sessionId, message: turn.message },
+      // show_thinking exposes surface thinking_delta frames for the report.
+      payload: { session_id: sessionId, message: turn.message, show_thinking: true },
     });
     const durationMs = Date.now() - turnStartedAt;
 
@@ -297,6 +302,10 @@ async function runTrial(
       .filter((event) => event.type === 'delta')
       .map((event) => event.text)
       .join('');
+    const thinkingText = events
+      .filter((event) => event.type === 'thinking_delta')
+      .map((event) => event.text)
+      .join('');
 
     for (const event of events) {
       if (event.type === 'usage') {
@@ -309,6 +318,7 @@ async function runTrial(
       message: turn.message,
       sessionId,
       events,
+      thinkingText,
       assistantText,
       toolCalls,
       toolResults,
@@ -439,7 +449,7 @@ async function runTrial(
     }
   }
 
-  const judge = await maybeRunJudge(scenario, run);
+  const { judge, judgeInput } = await maybeRunJudge(scenario, run);
   if (judge !== null && judge.status === 'ok') {
     const threshold = meta.judgeThreshold;
     if (threshold !== null) {
@@ -467,37 +477,47 @@ async function runTrial(
     usage: { inputTokens: usageInputTokens, outputTokens: usageOutputTokens },
     checks,
     judge,
+    judgeRubric: scenario.judge?.rubric ?? null,
+    judgeInput,
     transcript: turns.map(toTurnTranscript),
-    tasks: tasks.map(toTaskSummary),
+    tasks: await Promise.all(
+      tasks.map((task) => toTaskSummary(handle.dataRoot, task)),
+    ),
   };
 }
 
-/** Runs the LLM judge when enabled and the scenario declares a rubric. */
+/**
+ * Runs the LLM judge when enabled and the scenario declares a rubric. Also
+ * returns the exact transcript the judge graded so the report can show it.
+ */
 async function maybeRunJudge(
   scenario: E2eScenario,
   run: ScenarioRun,
-): Promise<JudgeResult | null> {
+): Promise<{ judge: JudgeResult | null; judgeInput: string | null }> {
   if (scenario.judge === undefined) {
-    return null;
+    return { judge: null, judgeInput: null };
   }
 
   const meta = inject('e2eMeta');
   if (meta.judgeMode === 'off') {
-    return { status: 'skipped' };
+    return { judge: { status: 'skipped' }, judgeInput: null };
   }
 
   const extraEvidence =
     scenario.judge.evidence !== undefined
       ? await scenario.judge.evidence(run)
       : undefined;
+  const judgeInput = buildJudgeTranscript(run, extraEvidence);
 
-  return runJudge({
+  const judge = await runJudge({
     baseUrl: meta.judgeBaseUrl,
     modelId: meta.judgeModelId,
     apiKey: meta.judgeApiKey,
     rubric: scenario.judge.rubric,
-    transcript: buildJudgeTranscript(run, extraEvidence),
+    transcript: judgeInput,
   });
+
+  return { judge, judgeInput };
 }
 
 /** Builds the judge input from turns, task outcomes, and extra evidence. */
@@ -555,23 +575,39 @@ async function readWorkspaceFiles(
   return files;
 }
 
+/** Builds the report transcript for one turn, pairing tool calls with results. */
 function toTurnTranscript(turn: TurnOutcome): TurnTranscript {
+  const resultsById = new Map(
+    turn.toolResults.map((result) => [result.tool_call_id, result]),
+  );
+
   return {
     user: turn.message,
+    thinking: turn.thinkingText,
     assistantText: turn.assistantText,
-    toolCalls: turn.toolCalls.map((call) => ({
-      name: call.tool_name,
-      input: call.input,
-    })),
+    toolCalls: turn.toolCalls.map((call) => {
+      const result = resultsById.get(call.tool_call_id);
+      return {
+        name: call.tool_name,
+        input: capPayload(call.input),
+        output: result === undefined ? null : capPayload(result.output),
+        isError: result?.is_error === true,
+      };
+    }),
   };
 }
 
-function toTaskSummary(task: TaskRecord): TaskSummary {
+/** Summarizes one task for the report, attaching its worker attempt traces. */
+async function toTaskSummary(
+  dataRoot: string,
+  task: TaskRecord,
+): Promise<TaskSummary> {
   return {
     id: task.id,
     status: task.status,
     description: task.description,
     result: task.result,
     errorMessage: task.errorMessage,
+    attempts: await readWorkerAttemptTraces(dataRoot, task),
   };
 }

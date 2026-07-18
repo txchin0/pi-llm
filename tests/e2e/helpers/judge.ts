@@ -5,8 +5,15 @@ export type JudgeCriterionResult = {
 };
 
 export type JudgeResult =
-  | { status: 'ok'; score: number; criteria: JudgeCriterionResult[]; raw: string }
-  | { status: 'error'; raw: string }
+  | {
+      status: 'ok';
+      score: number;
+      criteria: JudgeCriterionResult[];
+      /** Reasoning the judge produced before its verdict ('' when none). */
+      thinking: string;
+      raw: string;
+    }
+  | { status: 'error'; raw: string; thinking?: string }
   | { status: 'skipped' };
 
 export type JudgeOptions = {
@@ -53,6 +60,7 @@ export async function runJudge(options: JudgeOptions): Promise<JudgeResult> {
   ].join('\n');
 
   let content: string;
+  let reasoning: string;
   try {
     const response = await fetch(
       `${options.baseUrl.replace(/\/$/, '')}/chat/completions`,
@@ -65,10 +73,11 @@ export async function runJudge(options: JudgeOptions): Promise<JudgeResult> {
         body: JSON.stringify({
           model: options.modelId,
           temperature: 0,
-          max_tokens: 768,
-          // Thinking models spend the whole token budget on reasoning and
-          // return an empty content field; llama.cpp honors this toggle.
-          chat_template_kwargs: { enable_thinking: false },
+          // Thinking is enabled so the report can show the judge's reasoning;
+          // the budget must cover reasoning plus the JSON verdict, otherwise
+          // thinking models hit the cap before emitting any content.
+          max_tokens: 4096,
+          chat_template_kwargs: { enable_thinking: true },
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: options.transcript },
@@ -82,9 +91,15 @@ export async function runJudge(options: JudgeOptions): Promise<JudgeResult> {
     }
 
     const body = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{
+        message?: { content?: string; reasoning_content?: string; reasoning?: string };
+      }>;
     };
-    content = body.choices?.[0]?.message?.content ?? '';
+    const message = body.choices?.[0]?.message;
+    content = message?.content ?? '';
+    // llama.cpp surfaces reasoning as `reasoning_content`; some other
+    // OpenAI-compatible servers use `reasoning`.
+    reasoning = message?.reasoning_content ?? message?.reasoning ?? '';
   } catch (error) {
     return {
       status: 'error',
@@ -92,31 +107,56 @@ export async function runJudge(options: JudgeOptions): Promise<JudgeResult> {
     };
   }
 
-  return parseJudgeContent(content);
+  return parseJudgeContent(content, reasoning);
 }
 
-/** Extracts and validates the judge's JSON verdict from raw model output. */
-export function parseJudgeContent(content: string): JudgeResult {
-  const start = content.indexOf('{');
-  const end = content.lastIndexOf('}');
+/**
+ * Extracts and validates the judge's JSON verdict from raw model output.
+ * Inline `<think>` blocks (emitted when the server does not split reasoning
+ * into `reasoning_content`) are folded into the returned thinking so a brace
+ * inside the reasoning cannot corrupt the JSON extraction.
+ */
+export function parseJudgeContent(
+  content: string,
+  reasoningContent = '',
+): JudgeResult {
+  const inlineThinking: string[] = [];
+  const verdictText = content.replace(
+    /<think>([\s\S]*?)<\/think>/gi,
+    (_match, body: string) => {
+      inlineThinking.push(body.trim());
+      return '';
+    },
+  );
+  const thinking = [reasoningContent.trim(), ...inlineThinking]
+    .filter((part) => part !== '')
+    .join('\n\n');
+  const errorResult: JudgeResult = {
+    status: 'error',
+    raw: content,
+    ...(thinking === '' ? {} : { thinking }),
+  };
+
+  const start = verdictText.indexOf('{');
+  const end = verdictText.lastIndexOf('}');
   if (start === -1 || end <= start) {
-    return { status: 'error', raw: content };
+    return errorResult;
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(content.slice(start, end + 1));
+    parsed = JSON.parse(verdictText.slice(start, end + 1));
   } catch {
-    return { status: 'error', raw: content };
+    return errorResult;
   }
 
   if (typeof parsed !== 'object' || parsed === null) {
-    return { status: 'error', raw: content };
+    return errorResult;
   }
 
   const record = parsed as { score?: unknown; criteria?: unknown };
   if (typeof record.score !== 'number' || !Number.isFinite(record.score)) {
-    return { status: 'error', raw: content };
+    return errorResult;
   }
 
   const criteria: JudgeCriterionResult[] = [];
@@ -135,5 +175,5 @@ export function parseJudgeContent(content: string): JudgeResult {
   }
 
   const score = Math.min(100, Math.max(0, Math.round(record.score)));
-  return { status: 'ok', score, criteria, raw: content };
+  return { status: 'ok', score, criteria, thinking, raw: content };
 }

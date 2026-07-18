@@ -108,7 +108,7 @@ function mapDismissOutcome(
       };
     default: {
       const _exhaustive: never = outcome;
-      throw new Error(`Unhandled dismiss outcome: ${_exhaustive}`);
+      return _exhaustive;
     }
   }
 }

@@ -1,11 +1,12 @@
 import { execSync } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import type { TestProject } from 'vitest/node';
 
 import { checkAgentLlmEndpoint } from '../../../src/config/agentLlm.js';
 import { resolveE2eRuntimeConfig } from '../helpers/e2eEnv.js';
+import { renderHtmlReport } from '../helpers/htmlReport.js';
 import { buildRunMeta, mergeFragments, printSummary } from '../helpers/report.js';
 
 /** Returns the current git SHA, or null outside a usable git checkout. */
@@ -25,7 +26,8 @@ function sanitizeForPath(value: string): string {
 /**
  * Fails fast when the configured LLM endpoints are unreachable, then prepares
  * the per-run results directory. Teardown merges scenario fragments into
- * `report.json` and prints the summary table.
+ * `report.json`, renders the browsable `report.html`, and prints the summary
+ * table.
  */
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
   const config = await resolveE2eRuntimeConfig();
@@ -60,6 +62,7 @@ export default async function setup(project: TestProject): Promise<() => Promise
 
   return async () => {
     const report = await mergeFragments(runDir, meta);
+    await writeFile(join(runDir, 'report.html'), renderHtmlReport(report), 'utf8');
     printSummary(report, runDir);
   };
 }
