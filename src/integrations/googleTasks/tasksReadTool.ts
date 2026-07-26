@@ -41,7 +41,7 @@ const tasksReadSchema = Type.Object({
   ),
 });
 
-/** Registers the `tasks_read` tool for surface agents. */
+/** Registers the `tasks_read` tool for surface and worker agents. */
 export function registerTasksReadTool(pi: ExtensionAPI, ctx: IntegrationContext): void {
   pi.registerTool({
     name: 'tasks_read',
@@ -52,7 +52,7 @@ export function registerTasksReadTool(pi: ExtensionAPI, ctx: IntegrationContext)
     promptGuidelines: [
       'Use tasks_read when the user asks about todos, due tasks, or task lists.',
       'When the user names a specific day, pass date (YYYY-MM-DD). For ranges, pass dueMin and dueMax.',
-      'Always note list id and task id from results; the worker needs list id for writes.',
+      'Always note list id and task id from results; list id is required for tasks_write.',
     ],
     parameters: tasksReadSchema,
     async execute(_toolCallId, params, signal) {

@@ -1,13 +1,13 @@
 # Google Tasks integration
 
-Agent reference for `tasks_read` (surface) and `tasks_write` (worker). Shared OAuth helpers live in `src/integrations/google/`.
+Agent reference for `tasks_read` (surface + worker) and `tasks_write` (worker). Shared OAuth helpers live in `src/integrations/google/`.
 
 ## OAuth scopes
 
 | Role | Scope | Purpose |
 |------|-------|---------|
 | Surface | `https://www.googleapis.com/auth/tasks.readonly` | List task lists and tasks |
-| Worker | `https://www.googleapis.com/auth/tasks` | Create, update, delete tasks |
+| Worker | `https://www.googleapis.com/auth/tasks` | List task lists and tasks; create, update, delete tasks |
 
 Enable the Google Tasks API in the same GCP project as Calendar OAuth credentials.
 
