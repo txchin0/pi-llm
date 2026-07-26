@@ -44,7 +44,6 @@ describe('buildSurfaceSystemPrompt', () => {
     expect(prompt).toContain('Never mention or repeat the prefix itself.');
     expect(prompt).toContain("Never say you don't know or don't remember until you have");
     expect(prompt).toContain('# Deferred work');
-    expect(prompt).toContain('Never schedule a task for it');
     expect(prompt).toContain('turning relative dates and times like "tomorrow"');
     expect(prompt).toContain('Only schedule work the user has actually asked for.');
     expect(prompt).toContain('# Task status');

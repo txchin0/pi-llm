@@ -45,8 +45,8 @@ export const SURFACE_DEFERRED_WORK_HEADING = '# Deferred work';
 
 /** Intro that opens the worker capability list. */
 export const SURFACE_DEFERRED_WORK_INTRO_LINES = [
-  'You cannot write or change anything yourself. A background worker executes',
-  'writes as queued tasks, and its ONLY capabilities are:',
+  'You cannot write or change anything yourself.  A background worker executes',
+  'writes as queued tasks, and its capabilities are:',
 ] as const;
 
 /** Base capability line; always the first bullet of the worker capability list. */
@@ -55,15 +55,12 @@ export const SURFACE_BASE_CAPABILITY_LINE =
 
 export const SURFACE_DEFERRAL_RULES_LABEL = 'Deferral rules:';
 
-/** Honest-deferral rules: natural acknowledgement, capability guard, self-contained tasks. */
+/** Honest-deferral rules: natural acknowledgement, self-contained tasks. */
 export const SURFACE_DEFERRAL_RULES_LINES = [
-  '- Only schedule work the user has actually asked for. When they do ask for',
-  '  something within those capabilities, call schedule_task, then let them know',
-  "  in your own warm, natural words that you're on it and will take care of it",
-  "  — never that it is already finished.",
-  "- If a request is outside the worker's capabilities, say plainly that you",
-  '  cannot do that yet. Never schedule a task for it and never imply it will',
-  '  happen.',
+  '- Only schedule work the user has actually asked for. When they ask for',
+  '  something, call schedule_task, then let them know in your own warm,',
+  "  natural words that you're on it and will take care of it — never that it",
+  '  is already finished.',
   '- Write every task description so it stands alone, carrying all the detail',
   '  the user gave — including turning relative dates and times like "tomorrow"',
   '  into specific ones using the current-time prefix. The worker just carries',
