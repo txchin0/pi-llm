@@ -53,15 +53,20 @@ export async function readWorkerAttemptTraces(
     return [];
   }
 
-  const prefix = `${task.id}-attempt-`;
+  // Filenames lead with the task creation timestamp, so match on the task id
+  // segment rather than the start of the name.
+  const marker = `-${task.id}-attempt-`;
   const attempts: WorkerAttemptTrace[] = [];
 
   for (const name of entries) {
-    if (!name.startsWith(prefix) || !name.endsWith('.jsonl')) {
+    const markerIndex = name.indexOf(marker);
+    if (markerIndex < 0 || !name.endsWith('.jsonl')) {
       continue;
     }
 
-    const attempt = Number(name.slice(prefix.length, -'.jsonl'.length));
+    const attempt = Number(
+      name.slice(markerIndex + marker.length, -'.jsonl'.length),
+    );
     if (!Number.isInteger(attempt) || attempt < 0) {
       continue;
     }

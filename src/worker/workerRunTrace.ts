@@ -46,7 +46,11 @@ type CreateWorkerRunTraceSinkOptions = {
   log?: AppLogger;
 };
 
-/** Resolves the per-attempt worker trace JSONL path under the user data root. */
+/**
+ * Resolves the per-attempt worker trace JSONL path under the user data root.
+ * The filename leads with the task creation timestamp so directory listings
+ * sort chronologically.
+ */
 export function resolveWorkerTracePath(
   dataRoot: string,
   task: TaskRecord,
@@ -56,8 +60,13 @@ export function resolveWorkerTracePath(
     'users',
     task.userId,
     'worker-traces',
-    `${task.id}-attempt-${task.retryCount}.jsonl`,
+    `${toFilenameTimestamp(task.createdAt)}-${task.id}-attempt-${task.retryCount}.jsonl`,
   );
+}
+
+/** Renders an ISO timestamp as a filesystem-safe, lexicographically sortable prefix. */
+function toFilenameTimestamp(iso: string): string {
+  return iso.replace(/[:.]/g, '-');
 }
 
 /** Creates a JSONL trace sink for one worker task attempt. */

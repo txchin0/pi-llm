@@ -29,12 +29,28 @@ function createTask(overrides: Partial<TaskRecord> = {}): TaskRecord {
 }
 
 describe('resolveWorkerTracePath', () => {
-  it('includes task id and retry attempt in the filename', () => {
+  it('leads with the creation timestamp, then task id and retry attempt', () => {
     const task = createTask({ retryCount: 2 });
 
     expect(resolveWorkerTracePath('/data', task)).toBe(
-      join('/data', 'users', 'web-user', 'worker-traces', 'task_test00000001-attempt-2.jsonl'),
+      join(
+        '/data',
+        'users',
+        'web-user',
+        'worker-traces',
+        '2026-01-01T00-00-00-000Z-task_test00000001-attempt-2.jsonl',
+      ),
     );
+  });
+
+  it('sorts chronologically by filename', () => {
+    const earlier = createTask({ createdAt: '2026-01-01T00:00:00.000Z' });
+    const later = createTask({ createdAt: '2026-02-01T00:00:00.000Z' });
+
+    expect(
+      resolveWorkerTracePath('/data', earlier) <
+        resolveWorkerTracePath('/data', later),
+    ).toBe(true);
   });
 });
 
