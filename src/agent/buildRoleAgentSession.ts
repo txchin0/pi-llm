@@ -77,7 +77,7 @@ export async function buildRoleAgentSession(
     dataRoot: options.dataRoot,
     systemPrompt: spec.buildSystemPrompt({
       promptFragments: integrationExtras.promptFragments,
-      workerCapabilities: [],
+      workerCapabilities: integrationExtras.workerCapabilities,
       workspace,
     }),
     settingsManager,

@@ -220,6 +220,7 @@ Use `createEmptyIntegrationStore()` from `tests/helpers/emptyIntegrationStore.ts
 | `tools` | yes | Per-role `IntegrationToolSpec[]` (partial) |
 | `parseConfig` | no | Validate/normalize stored `config`; throw on invalid shape |
 | `systemPrompt` | no | Per-role cross-tool policy appended to the system prompt |
+| `workerCapability` | no | One sentence for the surface agent's deferral-capability list; omit when the integration is not a deferral target (e.g. `web_search`) |
 | `onSessionShutdown` | no | Per-session cleanup (session-scoped resources only) |
 | `onProcessShutdown` | no | Process-wide cleanup (shared clients, connection pools) |
 

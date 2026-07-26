@@ -27,6 +27,8 @@ export const googleCalendarIntegration: IntegrationDefinition = {
   id: 'google_calendar',
   label: 'Google Calendar',
   defaultEnabled: false,
+  workerCapability:
+    'Manage Google Calendar: create, update, or delete events, including popup reminders before events.',
   oauth: {
     providerId: 'google',
     scopes: {

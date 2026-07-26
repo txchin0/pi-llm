@@ -40,6 +40,12 @@ export type IntegrationDefinition = {
   /** When set, the integration uses the shared OAuth layer for API access. */
   oauth?: IntegrationOAuthDeclaration;
   systemPrompt?: Partial<Record<AgentLlmRole, string>>;
+  /**
+   * One sentence describing what the worker can do with this integration,
+   * rendered into the surface agent's deferral-capability list.
+   * Omit for integrations that should not be deferral targets (e.g. web search).
+   */
+  workerCapability?: string;
   parseConfig?(raw: Record<string, unknown>): unknown;
   onSessionShutdown?: () => Promise<void> | void;
   /** Optional process-wide warmup run once at server startup (e.g. eager module import). Must be idempotent. */

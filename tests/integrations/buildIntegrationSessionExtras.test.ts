@@ -62,6 +62,14 @@ const testIntegration: IntegrationDefinition = {
   onProcessShutdown: processShutdown,
 };
 
+const capabilityIntegration: IntegrationDefinition = {
+  id: 'capability_test',
+  label: 'Capability Test',
+  defaultEnabled: false,
+  tools: {},
+  workerCapability: 'Do the capable thing.',
+};
+
 let surfaceOAuthCtx: IntegrationContext | undefined;
 let workerOAuthCtx: IntegrationContext | undefined;
 
@@ -145,6 +153,47 @@ describe('buildIntegrationSessionExtras', () => {
 
     expect(surfaceExtras.toolNames).toEqual(['web_search']);
     expect(workerExtras.toolNames).toEqual(['web_search']);
+  });
+
+  it('collects workerCapability for both roles and skips integrations without one', () => {
+    const enabled = [
+      { definition: testIntegration, config: {} },
+      { definition: capabilityIntegration, config: {} },
+    ];
+
+    const surfaceExtras = buildIntegrationSessionExtras(enabled, 'surface', extrasInput('user-a'));
+    const workerExtras = buildIntegrationSessionExtras(enabled, 'worker', extrasInput('user-a'));
+
+    expect(surfaceExtras.workerCapabilities).toEqual(['Do the capable thing.']);
+    expect(workerExtras.workerCapabilities).toEqual(['Do the capable thing.']);
+  });
+
+  it('skips blank workerCapability values and trims collected ones', () => {
+    const blank: IntegrationDefinition = { ...capabilityIntegration, workerCapability: '   ' };
+    const padded: IntegrationDefinition = {
+      ...capabilityIntegration,
+      workerCapability: '  Padded capability.  ',
+    };
+
+    expect(
+      buildIntegrationSessionExtras([{ definition: blank, config: {} }], 'surface', extrasInput('u'))
+        .workerCapabilities,
+    ).toEqual([]);
+    expect(
+      buildIntegrationSessionExtras(
+        [{ definition: padded, config: {} }],
+        'surface',
+        extrasInput('u'),
+      ).workerCapabilities,
+    ).toEqual(['Padded capability.']);
+  });
+
+  it('collects no capability line for web search', async () => {
+    const enabled = await resolveEnabledIntegrations(createEmptyIntegrationStore(), 'user-a');
+
+    expect(
+      buildIntegrationSessionExtras(enabled, 'surface', extrasInput('user-a')).workerCapabilities,
+    ).toEqual([]);
   });
 
   it('wires onSessionShutdown but not onProcessShutdown in the extension factory', async () => {

@@ -45,7 +45,7 @@ describe('buildSurfaceSystemPrompt', () => {
     expect(prompt).toContain("Never say you don't know or don't remember until you have");
     expect(prompt).toContain('# Deferred work');
     expect(prompt).toContain('turning relative dates and times like "tomorrow"');
-    expect(prompt).toContain('Only schedule work the user has actually asked for.');
+    expect(prompt).toContain('call schedule_task, then let them know');
     expect(prompt).toContain('# Task status');
   });
 

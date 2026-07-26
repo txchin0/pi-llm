@@ -16,6 +16,8 @@ export type IntegrationSessionExtras = {
   toolNames: string[];
   extensionFactory: ExtensionFactory;
   promptFragments: string[];
+  /** Worker capability sentences, collected for both roles (the worker ignores them). */
+  workerCapabilities: string[];
 };
 
 /** Builds allowlist names, extension factory, and prompt fragments for one agent role. */
@@ -26,6 +28,7 @@ export function buildIntegrationSessionExtras(
 ): IntegrationSessionExtras {
   const toolNames: string[] = [];
   const promptFragments: string[] = [];
+  const workerCapabilities: string[] = [];
 
   for (const { definition } of enabled) {
     const specs = getIntegrationToolsForRole(definition, role);
@@ -36,6 +39,11 @@ export function buildIntegrationSessionExtras(
     const prompt = definition.systemPrompt?.[role];
     if (prompt !== undefined && prompt.trim().length > 0) {
       promptFragments.push(prompt);
+    }
+
+    const capability = definition.workerCapability;
+    if (capability !== undefined && capability.trim().length > 0) {
+      workerCapabilities.push(capability.trim());
     }
   }
 
@@ -77,7 +85,7 @@ export function buildIntegrationSessionExtras(
     assertRegisteredToolsMatchAllowlist(toolNames, registeredNames);
   };
 
-  return { toolNames, extensionFactory, promptFragments };
+  return { toolNames, extensionFactory, promptFragments, workerCapabilities };
 }
 
 /** Ensures the extension factory registered every tool name in the allowlist. */

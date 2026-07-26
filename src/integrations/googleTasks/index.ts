@@ -25,6 +25,7 @@ export const googleTasksIntegration: IntegrationDefinition = {
   id: 'google_tasks',
   label: 'Google Tasks',
   defaultEnabled: false,
+  workerCapability: 'Manage Google Tasks: create, update, or complete todos.',
   oauth: {
     providerId: 'google',
     scopes: {

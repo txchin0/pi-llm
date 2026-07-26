@@ -19,7 +19,7 @@ export type WorkspaceSnapshot = {
 /** Inputs gathered by the session harness for role system-prompt builders. */
 export type SystemPromptInputs = {
   promptFragments: string[];
-  /** Populated when integration workerCapability metadata lands (KAN-32). */
+  /** One sentence per enabled integration declaring `workerCapability`; the worker ignores these. */
   workerCapabilities: string[];
   workspace: WorkspaceSnapshot;
 };
