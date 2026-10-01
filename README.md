@@ -12,6 +12,8 @@ search, Google Calendar and Google Tasks.
 The companion chat client (React web and Capacitor Android) lives in
 [ts-llm-frontend](https://github.com/txchin0/ts-llm-frontend).
 
+![The chat client streaming a reply: the surface agent reads the calendar and defers a write to the worker](https://raw.githubusercontent.com/txchin0/ts-llm-frontend/main/docs/media/demo.gif)
+
 ## Why two agents?
 
 Small local models are slow when they reason and risky when they hold write access.
