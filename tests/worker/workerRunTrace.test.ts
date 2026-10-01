@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -184,8 +184,11 @@ describe('createWorkerRunTraceSink', () => {
   });
 
   it('does not throw when close is called after write failures', async () => {
+    // A regular file as the data root makes mkdir fail on every platform.
+    const blocker = join(await mkdtemp(join(tmpdir(), 'pi-llm-trace-')), 'not-a-dir');
+    await writeFile(blocker, '');
     const trace = createWorkerRunTraceSink({
-      dataRoot: '/nonexistent-root/pi-llm-trace',
+      dataRoot: blocker,
       task: createTask(),
       startedAt: '2026-01-01T12:00:00.000+11:00',
     });

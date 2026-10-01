@@ -83,17 +83,27 @@ export function createWorkerRunTraceSink(
     return createWriteStream(tracePath, { flags: 'w' });
   });
 
-  let writeChain: Promise<void> = streamReady.then(async (activeStream) => {
-    await writeLine(
-      activeStream,
-      `${JSON.stringify({
-        ...nextEnvelope(),
-        type: 'run_start',
-        description: options.task.description,
-        started_at: options.startedAt,
-      })}\n`,
-    );
-  });
+  // The chain must never reject: a rejected link would skip every later
+  // record and make close() throw, while tracing is best-effort.
+  let writeChain: Promise<void> = streamReady.then(
+    async (activeStream) => {
+      try {
+        await writeLine(
+          activeStream,
+          `${JSON.stringify({
+            ...nextEnvelope(),
+            type: 'run_start',
+            description: options.task.description,
+            started_at: options.startedAt,
+          })}\n`,
+        );
+      } catch (error: unknown) {
+        logWriteFailure(options.log, error);
+      }
+    },
+    // Directory/stream creation failure is logged by the streamReady handler.
+    () => undefined,
+  );
 
   const sink: WorkerRunTraceSink = {
     onEvent(event) {
@@ -125,8 +135,19 @@ export function createWorkerRunTraceSink(
 
       await writeChain;
 
-      const activeStream = await streamReady;
-      await closeStream(activeStream);
+      let activeStream: WriteStream;
+      try {
+        activeStream = await streamReady;
+      } catch {
+        // Already logged by the streamReady handler.
+        return;
+      }
+
+      try {
+        await closeStream(activeStream);
+      } catch (error: unknown) {
+        logWriteFailure(options.log, error);
+      }
     },
   };
 
