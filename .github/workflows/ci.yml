@@ -8,6 +8,10 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # Type-aware lint loads the full googleapis typings (~1.8 GB heap);
+      # Node's default limit on the runner is too small.
+      NODE_OPTIONS: --max-old-space-size=6144
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
