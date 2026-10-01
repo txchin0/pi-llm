@@ -158,10 +158,10 @@ describe('e2e: google calendar (faked googleapis)', () => {
       ],
       checks: [
         // As-built, the worker marks the task `completed` even when the tool
-        // reported "not connected" (no OUTCOME parsing yet — see
-        // docs/agent-performance-report.md §8.4), so we assert only that a
-        // terminal status was reached (standing awaitTask check) and that no
-        // event leaked into the calendar.
+        // reported "not connected" (the worker's OUTCOME line is not parsed
+        // yet), so we assert only that a terminal status was reached
+        // (standing awaitTask check) and that no event leaked into the
+        // calendar.
         {
           name: 'no event created',
           severity: 'must',

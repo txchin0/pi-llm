@@ -19,10 +19,9 @@ afterAll(async () => {
 });
 
 describe('e2e: out-of-capability request', () => {
-  // Acceptance scenario from docs/agent-performance-report.md §12: a request
-  // for a capability that does not exist (email). The surface prompt no longer
-  // tells the model to decline such requests — if it queues a task, the worker
-  // reports the failure — so the no-task expectations are report-only `should`
+  // Acceptance scenario: a request for a capability that does not exist
+  // (email). The surface prompt no longer tells the model to decline such
+  // requests — if it queues a task, the worker reports the failure — so the no-task expectations are report-only `should`
   // checks that track behaviour rather than gate CI. The `must` check below
   // still guarantees the user gets a real reply, and the judge rubric holds
   // the line that matters: never claim the email was sent.

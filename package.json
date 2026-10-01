@@ -1,6 +1,13 @@
 {
   "name": "pi-llm",
   "version": "0.1.0",
+  "description": "Personal-assistant backend: a low-latency chat agent defers write work to a background worker agent, running on local LLMs with Google Calendar and Tasks integrations.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/txchin0/pi-llm.git"
+  },
+  "keywords": ["llm", "agents", "personal-assistant", "llama.cpp", "fastify", "typescript"],
   "private": true,
   "type": "module",
   "engines": {

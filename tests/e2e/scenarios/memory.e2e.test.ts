@@ -35,9 +35,8 @@ async function workspaceEvidence(run: ScenarioRun): Promise<string> {
 }
 
 describe('e2e: memory workspace (surface -> queue -> worker)', () => {
-  // Acceptance scenario from docs/agent-performance-report.md §12: a "remember
-  // this" request must defer to the worker, which persists the fact and
-  // updates the index.
+  // Acceptance scenario: a "remember this" request must defer to the worker,
+  // which persists the fact and updates the index.
   it('memory-remember-fact: fact is persisted by the worker', async () => {
     await runScenario(handle, {
       id: 'memory-remember-fact',

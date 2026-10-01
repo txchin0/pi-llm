@@ -531,7 +531,6 @@ Execute in order to keep the app runnable after each step.
 
 ### Phase 6 — Docs and comments
 
-- [ ] Update cross-references in `docs/PI_SDK_REPORT.md` if still relevant.
 - [ ] Add one-line pointer from `AGENTS.md` or `DESIGN.md` to this doc (optional).
 
 ---
@@ -548,7 +547,6 @@ Execute in order to keep the app runnable after each step.
 | `src/server/routes/respond.ts` | Remove duplicate validation; rename orchestrator import |
 | `src/server/buildServer.ts` | `handler` → `service`, orchestrator → controller |
 | `src/index.ts` | `createSurfaceRespondService` |
-| `docs/PI_SDK_REPORT.md` | Update symbol names (§19 references) |
 
 **No changes expected:**
 
