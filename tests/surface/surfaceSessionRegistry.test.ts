@@ -26,8 +26,7 @@ function createSession(isStreaming = false) {
 function createRegistry(maxSessions: number) {
   return new SurfaceSessionRegistry({
     dataRoot: '/data',
-    authStorage: {} as never,
-    modelRegistry: {} as never,
+    modelRuntime: {} as never,
     model: {} as never,
     agentConfig: {} as never,
     taskQueue: createMockTaskQueue(),

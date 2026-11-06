@@ -41,8 +41,7 @@ describe('createWorkerTaskService', () => {
 
     const service = createWorkerTaskService({
       dataRoot: './data',
-      authStorage: {} as never,
-      modelRegistry: {} as never,
+      modelRuntime: {} as never,
       model: {} as never,
       agentConfig: {} as never,
       integrationStore: createEmptyIntegrationStore(),
@@ -83,8 +82,7 @@ describe('createWorkerTaskService', () => {
 
     const service = createWorkerTaskService({
       dataRoot: './data',
-      authStorage: {} as never,
-      modelRegistry: {} as never,
+      modelRuntime: {} as never,
       model: {} as never,
       agentConfig: {} as never,
       integrationStore: createEmptyIntegrationStore(),
@@ -131,8 +129,7 @@ describe('createWorkerTaskService', () => {
 
     const service = createWorkerTaskService({
       dataRoot: './data',
-      authStorage: {} as never,
-      modelRegistry: {} as never,
+      modelRuntime: {} as never,
       model: {} as never,
       agentConfig: {} as never,
       integrationStore: createEmptyIntegrationStore(),
@@ -155,8 +152,7 @@ describe('createWorkerTaskService', () => {
 
     const failingService = createWorkerTaskService({
       dataRoot: './data',
-      authStorage: {} as never,
-      modelRegistry: {} as never,
+      modelRuntime: {} as never,
       model: {} as never,
       agentConfig: {} as never,
       integrationStore: createEmptyIntegrationStore(),

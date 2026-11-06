@@ -1,4 +1,4 @@
-import type { AuthStorage, AgentSession, AgentSessionEvent, ModelRegistry } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, AgentSessionEvent, ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { extractAssistantOutcome } from '../agent/extractAssistantOutcome.js';
 import { runAgentPrompt } from '../agent/runAgentPrompt.js';
@@ -39,8 +39,7 @@ export type WorkerTraceFactory = (
 
 export type WorkerTaskServiceDependencies = {
   dataRoot: string;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  modelRuntime: ModelRuntime;
   model: AgentModel;
   agentConfig: AgentLlmConfig;
   integrationStore: IntegrationStore;
@@ -180,8 +179,7 @@ export function createWorkerTaskService(
         userMemoryWorkspace,
         dataRoot: dependencies.dataRoot,
         model: dependencies.model,
-        authStorage: dependencies.authStorage,
-        modelRegistry: dependencies.modelRegistry,
+        modelRuntime: dependencies.modelRuntime,
         agentConfig: dependencies.agentConfig,
         enabledIntegrations,
         oauthService: dependencies.oauthService,

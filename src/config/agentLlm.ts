@@ -1,9 +1,7 @@
 import path from 'node:path';
 
-import {
-  AuthStorage,
-  ModelRegistry,
-} from '@earendil-works/pi-coding-agent';
+import { InMemoryCredentialStore } from '@earendil-works/pi-ai';
+import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import type { AppLogger } from '../logging/types.js';
 import { parseBoolean, parseNonEmptyString, parsePositiveInt } from './parseEnv.js';
@@ -55,11 +53,10 @@ export type LoadAgentLlmConfigOptions = {
   defaults: AgentLlmDefaults;
 };
 
-export type AgentModel = NonNullable<ReturnType<ModelRegistry['find']>>;
+export type AgentModel = NonNullable<ReturnType<ModelRuntime['getModel']>>;
 
 export type AgentLlmRuntime = {
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  modelRuntime: ModelRuntime;
   model: AgentModel;
   checkEndpoint: () => Promise<AgentLlmEndpointCheckResult>;
   warnEndpoint: (log?: Pick<AppLogger, 'warn'>) => Promise<void>;
@@ -163,16 +160,16 @@ export function loadRoleAgentConfig(
 }
 
 /**
- * Loads role config and builds auth, registry, model, and endpoint helpers.
+ * Loads role config and builds the model runtime, model, and endpoint helpers.
  *
  * Callers name the role once; env prefix and thinking defaults come from
  * {@link loadRoleAgentConfig}.
  */
-export function createRoleAgentLlmRuntime(role: AgentLlmRole) {
+export async function createRoleAgentLlmRuntime(role: AgentLlmRole) {
   const config = loadRoleAgentConfig(role);
   return {
     config,
-    ...createAgentLlmRuntime(config, { role }),
+    ...(await createAgentLlmRuntime(config, { role })),
   };
 }
 
@@ -256,29 +253,31 @@ export function buildAgentModelRegistration(
   };
 }
 
-/** Creates auth storage with a runtime API key for the configured provider. */
-export function createAgentAuthStorage(config: AgentLlmConfig): AuthStorage {
-  const authStorage = AuthStorage.create();
-  authStorage.setRuntimeApiKey(config.provider, config.apiKey);
-  return authStorage;
-}
-
-/** Registers the llama.cpp-compatible provider and returns the registry. */
-export function createAgentModelRegistry(
-  authStorage: AuthStorage,
+/**
+ * Creates a hermetic model runtime with the llama.cpp-compatible provider registered.
+ *
+ * Credentials stay in memory and `models.json` / catalog refreshes are skipped,
+ * so nothing is read from the host's `~/.pi` directory or the network.
+ */
+export async function createAgentModelRuntime(
   config: AgentLlmConfig,
   role: AgentLlmRole,
-): ModelRegistry {
-  const modelRegistry = ModelRegistry.inMemory(authStorage);
+): Promise<ModelRuntime> {
+  const modelRuntime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: null,
+    refreshOnCreate: false,
+  });
 
-  modelRegistry.registerProvider(config.provider, {
+  modelRuntime.registerProvider(config.provider, {
     baseUrl: config.baseUrl,
     api: 'openai-completions',
     apiKey: config.apiKey,
     models: [buildAgentModelRegistration(config, role)],
   });
+  await modelRuntime.setRuntimeApiKey(config.provider, config.apiKey);
 
-  return modelRegistry;
+  return modelRuntime;
 }
 
 /** Checks whether the configured model exists on the OpenAI-compatible LLM server. */
@@ -356,12 +355,12 @@ export async function validateAgentLlmEndpoint(
   }
 }
 
-/** Resolves the configured agent model from the registry. */
+/** Resolves the configured agent model from the model runtime. */
 export function resolveAgentModel(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   config: AgentLlmConfig,
 ): AgentModel {
-  const model = modelRegistry.find(config.provider, config.modelId);
+  const model = modelRuntime.getModel(config.provider, config.modelId);
   if (!model) {
     throw new Error(
       `Agent model not found: ${config.provider}/${config.modelId}`,
@@ -379,22 +378,16 @@ export function resolveUserMemoryWorkspace(
   return path.resolve(dataRoot, 'users', userId, 'memory');
 }
 
-/** Builds auth storage, model registry, and endpoint helpers for one agent role. */
-export function createAgentLlmRuntime(
+/** Builds the model runtime, resolved model, and endpoint helpers for one agent role. */
+export async function createAgentLlmRuntime(
   config: AgentLlmConfig,
   options: { role: AgentLlmRole },
-): AgentLlmRuntime {
-  const authStorage = createAgentAuthStorage(config);
-  const modelRegistry = createAgentModelRegistry(
-    authStorage,
-    config,
-    options.role,
-  );
-  const model = resolveAgentModel(modelRegistry, config);
+): Promise<AgentLlmRuntime> {
+  const modelRuntime = await createAgentModelRuntime(config, options.role);
+  const model = resolveAgentModel(modelRuntime, config);
 
   return {
-    authStorage,
-    modelRegistry,
+    modelRuntime,
     model,
     checkEndpoint: () => checkAgentLlmEndpoint(config, options.role),
     warnEndpoint: (log) => warnAgentLlmEndpoint(config, options.role, log),

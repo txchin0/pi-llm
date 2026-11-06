@@ -1,8 +1,7 @@
 import type {
   AgentSession,
-  AuthStorage,
   ExtensionFactory,
-  ModelRegistry,
+  ModelRuntime,
 } from '@earendil-works/pi-coding-agent';
 import {
   createAgentSession as createPiAgentSession,
@@ -39,8 +38,7 @@ export type BuildRoleAgentSessionOptions = {
   userMemoryWorkspace: string;
   dataRoot: string;
   model: AgentModel;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  modelRuntime: ModelRuntime;
   thinkingLevel: AgentPiThinkingLevel;
   role: AgentLlmRole;
   enabledIntegrations: EnabledIntegration[];
@@ -92,8 +90,7 @@ export async function buildRoleAgentSession(
     model: options.model,
     thinkingLevel: options.thinkingLevel,
     tools: [...spec.baseTools, ...integrationExtras.toolNames],
-    authStorage: options.authStorage,
-    modelRegistry: options.modelRegistry,
+    modelRuntime: options.modelRuntime,
     resourceLoader,
     sessionManager: SessionManager.inMemory(options.userMemoryWorkspace),
     settingsManager,

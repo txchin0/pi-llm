@@ -315,7 +315,7 @@ Each agent session is configured independently. The server never shares a single
 
 ### 8.1 Package Choice
 
-Use the Pi coding harness SDK (`@earendil-works/pi-coding-agent`) embedded in the same Node.js process as the server. This provides agent sessions, model registry, authentication storage, custom tool definitions, and event streaming without subprocess RPC for MVP.
+Use the Pi coding harness SDK (`@earendil-works/pi-coding-agent`) embedded in the same Node.js process as the server. This provides agent sessions, a model runtime (models + auth), custom tool definitions, and event streaming without subprocess RPC for MVP.
 
 Lower-level `pi-agent-core` may be considered later if the coding-agent layer adds unnecessary weight, but the coding-agent SDK is the default integration path.
 

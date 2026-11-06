@@ -52,7 +52,7 @@ export async function startServer(): Promise<void> {
         })
       : unconfiguredOAuthService;
 
-  const surfaceLlm = createRoleAgentLlmRuntime('surface');
+  const surfaceLlm = await createRoleAgentLlmRuntime('surface');
   await surfaceLlm.warnEndpoint(
     createChildLogger(logger, { component: 'surface' }),
   );
@@ -86,8 +86,7 @@ export async function startServer(): Promise<void> {
 
   const registry = new SurfaceSessionRegistry({
     dataRoot: env.DATA_ROOT,
-    authStorage: surfaceLlm.authStorage,
-    modelRegistry: surfaceLlm.modelRegistry,
+    modelRuntime: surfaceLlm.modelRuntime,
     model: surfaceLlm.model,
     agentConfig: surfaceLlm.config,
     taskQueue,
@@ -110,7 +109,7 @@ export async function startServer(): Promise<void> {
 
   let workerLoop: WorkerLoop | undefined;
   if (env.WORKER_ENABLED) {
-    const workerLlm = createRoleAgentLlmRuntime('worker');
+    const workerLlm = await createRoleAgentLlmRuntime('worker');
     await workerLlm.warnEndpoint(
       createChildLogger(logger, { component: 'worker' }),
     );
@@ -119,8 +118,7 @@ export async function startServer(): Promise<void> {
 
     const workerTaskService = createWorkerTaskService({
       dataRoot: env.DATA_ROOT,
-      authStorage: workerLlm.authStorage,
-      modelRegistry: workerLlm.modelRegistry,
+      modelRuntime: workerLlm.modelRuntime,
       model: workerLlm.model,
       agentConfig: workerLlm.config,
       integrationStore,

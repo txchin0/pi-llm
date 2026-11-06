@@ -80,7 +80,7 @@ export async function buildE2eApp(
     connectedUserIds: options.connectedGoogleUserIds ?? 'all',
   });
 
-  const surfaceLlm = createAgentLlmRuntime(config.surface, { role: 'surface' });
+  const surfaceLlm = await createAgentLlmRuntime(config.surface, { role: 'surface' });
 
   const taskQueue = await createSqliteTaskQueue({
     dbPath: resolveTaskDbPath(dataRoot),
@@ -100,8 +100,7 @@ export async function buildE2eApp(
 
   const registry = new SurfaceSessionRegistry({
     dataRoot,
-    authStorage: surfaceLlm.authStorage,
-    modelRegistry: surfaceLlm.modelRegistry,
+    modelRuntime: surfaceLlm.modelRuntime,
     model: surfaceLlm.model,
     agentConfig: config.surface,
     taskQueue,
@@ -121,12 +120,11 @@ export async function buildE2eApp(
     authService,
   });
 
-  const workerLlm = createAgentLlmRuntime(config.worker, { role: 'worker' });
+  const workerLlm = await createAgentLlmRuntime(config.worker, { role: 'worker' });
   const workerLog = createChildLogger(logger, { component: 'worker' });
   const workerTaskService = createWorkerTaskService({
     dataRoot,
-    authStorage: workerLlm.authStorage,
-    modelRegistry: workerLlm.modelRegistry,
+    modelRuntime: workerLlm.modelRuntime,
     model: workerLlm.model,
     agentConfig: config.worker,
     integrationStore,

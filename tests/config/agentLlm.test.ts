@@ -4,8 +4,7 @@ import type { AppLogger } from '../../src/logging/types.js';
 import {
   buildAgentModelRegistration,
   checkAgentLlmEndpoint,
-  createAgentAuthStorage,
-  createAgentModelRegistry,
+  createAgentModelRuntime,
   resolveAgentModel,
   resolveUserMemoryWorkspace,
   validateAgentLlmEndpoint,
@@ -45,44 +44,35 @@ describe('buildAgentModelRegistration', () => {
   });
 });
 
-describe('createAgentModelRegistry', () => {
-  it('registers llama.cpp chat-template thinking controls', () => {
-    const authStorage = createAgentAuthStorage({
-      baseUrl: 'http://127.0.0.1:8080/v1',
-      modelId: 'gemma-4-12b-qat',
-      apiKey: 'local',
-      provider: 'llamacpp',
-      contextWindow: 8192,
-      maxTokens: 2048,
-      thinkingEnabled: false,
-      thinkingLevel: 'off',
-    });
-    const registry = createAgentModelRegistry(authStorage, {
-      baseUrl: 'http://127.0.0.1:8080/v1',
-      modelId: 'gemma-4-12b-qat',
-      apiKey: 'local',
-      provider: 'llamacpp',
-      contextWindow: 8192,
-      maxTokens: 2048,
-      thinkingEnabled: false,
-      thinkingLevel: 'off',
-    }, 'surface');
+describe('createAgentModelRuntime', () => {
+  it('registers llama.cpp chat-template thinking controls', async () => {
+    const modelRuntime = await createAgentModelRuntime(surfaceLlmConfig, 'surface');
 
-    expect(resolveAgentModel(registry, {
-      baseUrl: 'http://127.0.0.1:8080/v1',
-      modelId: 'gemma-4-12b-qat',
-      apiKey: 'local',
+    expect(resolveAgentModel(modelRuntime, surfaceLlmConfig)).toMatchObject({
       provider: 'llamacpp',
-      contextWindow: 8192,
-      maxTokens: 2048,
-      thinkingEnabled: false,
-      thinkingLevel: 'off',
-    })).toMatchObject({
+      id: 'gemma-4-12b-qat',
+      baseUrl: 'http://127.0.0.1:8080/v1',
       reasoning: true,
       compat: {
         thinkingFormat: 'qwen-chat-template',
       },
     });
+  });
+
+  it('resolves the configured API key as runtime auth', async () => {
+    const modelRuntime = await createAgentModelRuntime(surfaceLlmConfig, 'surface');
+
+    expect(modelRuntime.getProviderAuthStatus('llamacpp')).toMatchObject({
+      configured: true,
+    });
+  });
+
+  it('throws when the configured model is not registered', async () => {
+    const modelRuntime = await createAgentModelRuntime(surfaceLlmConfig, 'surface');
+
+    expect(() =>
+      resolveAgentModel(modelRuntime, { ...surfaceLlmConfig, modelId: 'missing' }),
+    ).toThrow('Agent model not found: llamacpp/missing');
   });
 });
 
