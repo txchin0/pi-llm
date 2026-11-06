@@ -1,4 +1,4 @@
-import type { AgentSession, AuthStorage, ModelRegistry } from '@earendil-works/pi-coding-agent';
+import type { AgentSession, ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { buildRoleAgentSession } from '../agent/buildRoleAgentSession.js';
 import type { AgentLlmConfig, AgentModel } from '../config/agentLlm.js';
@@ -14,8 +14,7 @@ export type CreateWorkerSessionOptions = {
   userMemoryWorkspace: string;
   dataRoot: string;
   model: AgentModel;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  modelRuntime: ModelRuntime;
   agentConfig: AgentLlmConfig;
   enabledIntegrations: EnabledIntegration[];
   oauthService: OAuthService;
@@ -35,8 +34,7 @@ export async function createWorkerSession(
     userMemoryWorkspace: options.userMemoryWorkspace,
     dataRoot: options.dataRoot,
     model: options.model,
-    authStorage: options.authStorage,
-    modelRegistry: options.modelRegistry,
+    modelRuntime: options.modelRuntime,
     thinkingLevel: options.agentConfig.thinkingLevel,
     role: 'worker',
     enabledIntegrations: options.enabledIntegrations,

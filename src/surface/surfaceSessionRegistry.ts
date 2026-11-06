@@ -1,7 +1,6 @@
 import type {
   AgentSession,
-  AuthStorage,
-  ModelRegistry,
+  ModelRuntime,
 } from '@earendil-works/pi-coding-agent';
 
 import {
@@ -19,8 +18,7 @@ import { createSurfaceSession } from './createSurfaceSession.js';
 
 export type SurfaceSessionRegistryDependencies = {
   dataRoot: string;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  modelRuntime: ModelRuntime;
   model: AgentModel;
   agentConfig: AgentLlmConfig;
   taskQueue: TaskQueue;
@@ -35,8 +33,7 @@ export type SurfaceSessionRegistryDependencies = {
 export class SurfaceSessionRegistry {
   private readonly sessions = new Map<SessionId, AgentSession>();
   private readonly dataRoot: string;
-  private readonly authStorage: AuthStorage;
-  private readonly modelRegistry: ModelRegistry;
+  private readonly modelRuntime: ModelRuntime;
   private readonly model: AgentModel;
   private readonly agentConfig: AgentLlmConfig;
   private readonly taskQueue: TaskQueue;
@@ -49,8 +46,7 @@ export class SurfaceSessionRegistry {
   /** Creates a registry with shared model and auth dependencies. */
   constructor(dependencies: SurfaceSessionRegistryDependencies) {
     this.dataRoot = dependencies.dataRoot;
-    this.authStorage = dependencies.authStorage;
-    this.modelRegistry = dependencies.modelRegistry;
+    this.modelRuntime = dependencies.modelRuntime;
     this.model = dependencies.model;
     this.agentConfig = dependencies.agentConfig;
     this.taskQueue = dependencies.taskQueue;
@@ -83,8 +79,7 @@ export class SurfaceSessionRegistry {
       userMemoryWorkspace: resolveUserMemoryWorkspace(this.dataRoot, userId),
       dataRoot: this.dataRoot,
       model: this.model,
-      authStorage: this.authStorage,
-      modelRegistry: this.modelRegistry,
+      modelRuntime: this.modelRuntime,
       agentConfig: this.agentConfig,
       taskQueue: this.taskQueue,
       contextTurnLimit: this.contextTurnLimit,

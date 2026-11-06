@@ -1,7 +1,6 @@
 import type {
   AgentSession,
-  AuthStorage,
-  ModelRegistry,
+  ModelRuntime,
 } from '@earendil-works/pi-coding-agent';
 
 import { buildRoleAgentSession } from '../agent/buildRoleAgentSession.js';
@@ -29,8 +28,7 @@ export type CreateSurfaceSessionOptions = {
   userMemoryWorkspace: string;
   dataRoot: string;
   model: AgentModel;
-  authStorage: AuthStorage;
-  modelRegistry: ModelRegistry;
+  modelRuntime: ModelRuntime;
   agentConfig: AgentLlmConfig;
   taskQueue: TaskQueue;
   contextTurnLimit: number;
@@ -73,8 +71,7 @@ export async function createSurfaceSession(
     userMemoryWorkspace: options.userMemoryWorkspace,
     dataRoot: options.dataRoot,
     model: options.model,
-    authStorage: options.authStorage,
-    modelRegistry: options.modelRegistry,
+    modelRuntime: options.modelRuntime,
     thinkingLevel: options.agentConfig.thinkingLevel,
     role: 'surface',
     enabledIntegrations: options.enabledIntegrations,

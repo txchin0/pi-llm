@@ -35,7 +35,7 @@ export function getExaMcpClient(apiKey?: string): Promise<Client> {
       { name: 'pi-llm-surface', version: '0.1.0' },
       { capabilities: {} },
     );
-    await client.connect(transport as Parameters<Client['connect']>[0]);
+    await client.connect(transport);
     return client;
   })();
 

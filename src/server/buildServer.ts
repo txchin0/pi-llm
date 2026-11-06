@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 import cors from '@fastify/cors';
-import Fastify, { type FastifyBaseLogger } from 'fastify';
+import Fastify, { LogController, type FastifyBaseLogger } from 'fastify';
 
 import { env } from '../config/env.js';
 
@@ -57,7 +57,7 @@ export function buildServer(options: BuildServerOptions) {
 
   const app = Fastify({
     loggerInstance: logger as unknown as FastifyBaseLogger,
-    disableRequestLogging: true,
+    logController: new LogController({ disableRequestLogging: true }),
     requestIdHeader: false,
     genReqId: () => requestIdFactory(),
   });

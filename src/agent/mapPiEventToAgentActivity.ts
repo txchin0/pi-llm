@@ -132,6 +132,12 @@ export function mapPiEventToAgentActivity(
     case 'auto_retry_end':
     case 'session_info_changed':
     case 'thinking_level_changed':
+    case 'agent_settled':
+    case 'entry_appended':
+    case 'summarization_retry_scheduled':
+    case 'summarization_retry_attempt_start':
+    case 'summarization_retry_finished':
+    case 'bash_execution_update':
       return [];
     default: {
       const _exhaustive: never = event;
