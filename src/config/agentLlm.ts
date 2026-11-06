@@ -165,7 +165,9 @@ export function loadRoleAgentConfig(
  * Callers name the role once; env prefix and thinking defaults come from
  * {@link loadRoleAgentConfig}.
  */
-export async function createRoleAgentLlmRuntime(role: AgentLlmRole) {
+export async function createRoleAgentLlmRuntime(
+  role: AgentLlmRole,
+): Promise<AgentLlmRuntime & { config: AgentLlmConfig }> {
   const config = loadRoleAgentConfig(role);
   return {
     config,
@@ -275,7 +277,6 @@ export async function createAgentModelRuntime(
     apiKey: config.apiKey,
     models: [buildAgentModelRegistration(config, role)],
   });
-  await modelRuntime.setRuntimeApiKey(config.provider, config.apiKey);
 
   return modelRuntime;
 }
