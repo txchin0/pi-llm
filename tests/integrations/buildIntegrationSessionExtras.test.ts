@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import { buildIntegrationSessionExtras } from '../../src/integrations/buildIntegrationSessionExtras.js';
 import type { OAuthService } from '../../src/integrations/oauth/oauthService.js';
@@ -104,8 +104,8 @@ const oauthIntegration: IntegrationDefinition = {
   },
 };
 
-function createStubOAuthService(): OAuthService & {
-  getAccessToken: ReturnType<typeof vi.fn>;
+function createStubOAuthService(): Omit<OAuthService, 'getAccessToken'> & {
+  getAccessToken: Mock<OAuthService['getAccessToken']>;
 } {
   return {
     start: vi.fn(),
